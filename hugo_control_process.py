@@ -17,30 +17,47 @@ import _thread
 # Instantiate CvBridge
 bridge = CvBridge()
 
+position_cb_enable = False
+orientation_cb_enable = False
+
+got_position = False
+got_orientiation = False
+
 
 
 def position_cb(data):
-    # global pos_x
-    # global pos_y
-    # global pos_z
-    # pos_x = data.x
-    # pos_y = data.y
-    # pos_z = data.z
-    print("Position   : x:", data.x, "   y:", data.y, "   :", data.z)
+    if position_cb_enable:
+        global pos_x
+        global pos_y
+        global pos_z
+        global got_position
+
+        pos_x = data.x
+        pos_y = data.y
+        pos_z = data.z
+
+        got_position = True
+        print("Position   : x:", data.x, "   y:", data.y, "   :", data.z)
     
 
 
 def orientation_cb(data):
-    # global ori_x
-    # global ori_y
-    # global ori_z
-    # ori_x = math.degrees(data.x)end_point_charge
-    # ori_y = math.degrees(data.y)
-    # ori_z = math.degrees(data.z)
-    # ori_x = data.x
-    # ori_y = data.y
-    # ori_z = data.z
-    print("Orientation   : x:", data.x, "   y:", data.y, "   :", data.z)
+    if orientation_cb_enable:
+        global ori_x
+        global ori_y
+        global ori_z
+        global got_orientiation 
+
+        ori_x = math.degrees(data.x)
+        ori_y = math.degrees(data.y)
+        ori_z = math.degrees(data.z)
+
+        ori_x = data.x
+        ori_y = data.y
+        ori_z = data.z
+        
+        got_orientiation = True
+        print("Orientation   : x:", data.x, "   y:", data.y, "   :", data.z)
 
 
 
@@ -155,6 +172,8 @@ def joint_control(q):
         joint_publisher24.publish(joint_pos[23])
         joint_publisher25.publish(joint_pos[24])
         joint_publisher26.publish(joint_pos[25])
+
+        q.put("hello from joint_control")
         # print("joint control thread joint control thread joint control thread ")
         rate.sleep()
         # rospy.sleep(0.1)
@@ -192,14 +211,34 @@ if __name__ == '__main__':
         exit(0)
 
 
+
     def step_cb(msg):
-        # print("step done")
+        global got_position
+        global got_orientiation
+        global q1
+
+
+        print("step done")
+
+        while not got_position and not got_orientiation:
+            time.sleep(0.001)
+
+        print(got_position, got_orientiation)
+        
+        #setting default values for next cycle
+        got_position = False
+        got_orientiation = False
+
+        q1.put("hello from main")
+        response = q1.get()
+        print(response)
+
+        time.sleep(0.5)
+
         step_publisher.publish(z)
         # time.sleep(5)
         return
 
-    z = Bool(True)
-    # z.data = True
 
     q1 = Queue()
     p1 = Process(target=joint_control, args=(q1,))
@@ -208,7 +247,7 @@ if __name__ == '__main__':
     q2 = Queue()
     p2 = Process(target=process_image, args=(q2,))
     p2.start()
-
+    
     rospy.init_node('hugo_main')
     q_size = 10
 
@@ -222,8 +261,14 @@ if __name__ == '__main__':
     rospy.Subscriber('/robOrientation', Point32, orientation_cb, queue_size = q_size)
     rospy.Subscriber("/simulationState", Int32, simState_cb)
 
+    position_cb_enable = True
+    orientation_cb_enable = True
+
     time.sleep(0.5)
     print("initialization done")
+
+    z = Bool(True)
+    # z.data = True
 
     signal.signal(signal.SIGINT, signal_handler)
     sync_publisher.publish(z)   #synchronize
@@ -234,12 +279,19 @@ if __name__ == '__main__':
     time.sleep(0.1) #original value 5
 
 
+
+
+
+
+    time.sleep(5)
+
+
     print("main thread")
 
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         # print("main thread main thread main thread main thread")
-        q1.put("hello")
+        # q1.put("hello")
         rate.sleep()
 
     stop_publisher.publish(z)
