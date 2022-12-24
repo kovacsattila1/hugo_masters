@@ -2,8 +2,8 @@
 
 import rospy
 from sensor_msgs.msg import Image # ROS Image message -> OpenCV2 image converter
-from cv_bridge import CvBridge, CvBridgeError # OpenCV2 for saving an image
 import cv2
+from cv_bridge import CvBridge, CvBridgeError # OpenCV2 for saving an image
 import math
 from std_msgs.msg import Float32
 from std_msgs.msg import Bool

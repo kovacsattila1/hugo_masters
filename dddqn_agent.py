@@ -86,12 +86,14 @@ class Agent():
     self.q_eval.compile(optimizer=Adam(learning_rate=lr), loss='mean_squared_error')
     self.q_next.compile(optimizer=Adam(learning_rate=lr), loss='mean_squared_error')
 
-    self.q_next.built = True
-    self.q_eval.built = True
+    # self.q_next.built = True
+    # self.q_eval.built = True
 
-    if os.path.isdir('./q_eval_weights') and os.path.isdir('./q_next_weights'):
-      self.q_eval.load_weights('./q_eval_weights/')
-      self.q_next.load_weights('./q_next_weights/')
+    # if os.path.isdir('./q_eval_weights') and os.path.isdir('./q_next_weights'):
+    #   print("Loading weights\n")
+    #   self.q_eval.load_weights('./q_eval_weights/')
+    #   self.q_next.load_weights('./q_next_weights/')
+    #   print("Load Suceeded!")
 
   # def load_networks(self):
   #   self.q_eval = keras.models.load_model('./dddqn_agent.q_eval', custom_objects={"DuelingDeepQNetwork": DuelingDeepQNetwork})

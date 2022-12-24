@@ -212,8 +212,8 @@ if __name__ == '__main__':
 
 
     try:
-      #t1 = _thread.start_new_thread(joint_control,(1,))
-      # t2 = _thread.start_new_thread(process_image,(1,))
+      t1 = _thread.start_new_thread(joint_control,(1,))
+      t2 = _thread.start_new_thread(process_image,(1,))
       t3 = _thread.start_new_thread(get_measurement,(1,))
     except:
       print ("Error: unable to start threads")
@@ -267,7 +267,7 @@ if __name__ == '__main__':
         axs[1, 2].plot(time_list, ori_z_list, 'tab:red')
         axs[1, 2].set_title('rot_z')
 
-        plt.pause(0.01)
+        plt.pause(0.001)
         # plt.clf()
         plt.draw()
         rate.sleep()
