@@ -19,9 +19,6 @@ import matplotlib.pyplot as plt
 import random
 import matplotlib.pyplot as plt
 import numpy as np
-import matplotlib
-# matplotlib.use("Qt5agg")
-# matplotlib.use('Agg')
 
 
 # Instantiate CvBridge
@@ -33,70 +30,14 @@ orientation_cb_enable = True
 got_position = True
 got_orientiation = True
 
+time_list = [0]
+pos_x_list = [0]
+pos_y_list = [0]
+pos_z_list = [0]
+ori_x_list = [0]
+ori_y_list = [0]
+ori_z_list = [0]
 
-
-def position_cb(data):
-    if position_cb_enable:
-        global pos_x
-        global pos_y
-        global pos_z
-        global got_position
-
-        pos_x = data.x
-        pos_y = data.y
-        pos_z = data.z
-
-        got_position = True
-        # print("Position   : x:", data.x, "   y:", data.y, "   :", data.z)
-    
-
-
-def orientation_cb(data):
-    if orientation_cb_enable:
-        global ori_x
-        global ori_y
-        global ori_z
-        global got_orientiation 
-
-        ori_x = math.degrees(data.x)
-        ori_y = math.degrees(data.y)
-        ori_z = math.degrees(data.z)
-
-        ori_x = data.x
-        ori_y = data.y
-        ori_z = data.z
-        
-        got_orientiation = True
-        # print("Orientation   : x:", data.x, "   y:", data.y, "   :", data.z)
-
-
-
-def image_cb(msg):
-    #print("Received an image!")
-    try:
-        # Convert your ROS Image message to OpenCV2
-        cv2_img = bridge.imgmsg_to_cv2(msg, "bgr8")
-        cv2_img = cv2.flip(cv2_img, 0)
-    except CvBridgeError as e:
-        print(e)
-    else:
-        # Save your OpenCV2 image as a jpeg 
-        #cv2.imwrite('camera_image.jpeg', cv2_img)
-        cv2.namedWindow("Input")
-        cv2.imshow("Input", cv2_img)
-        cv2.waitKey(1)
-
-
-
-def simTime_cb(msg):
-    # print("Simulation time: ",msg)
-    return
-
-
-
-def simState_cb(msg):
-    # print("Simulation state: ",msg)
-    return
 
 #------------------------------------------------------------------------------------------------------------
 
@@ -193,6 +134,22 @@ def joint_control(q):
 
 def process_image(q):
 
+    def image_cb(msg):
+        #print("Received an image!")
+        try:
+            # Convert your ROS Image message to OpenCV2
+            cv2_img = bridge.imgmsg_to_cv2(msg, "bgr8")
+            cv2_img = cv2.flip(cv2_img, 0)
+        except CvBridgeError as e:
+            print(e)
+        else:
+            # Save your OpenCV2 image as a jpeg 
+            #cv2.imwrite('camera_image.jpeg', cv2_img)
+            cv2.namedWindow("Input")
+            cv2.imshow("Input", cv2_img)
+            cv2.waitKey(1)
+
+
     rospy.init_node('hugo_vision')
     q_size = 10
     rospy.Subscriber("/image", Image, image_cb, queue_size=q_size, buff_size=2**10)
@@ -209,14 +166,6 @@ def process_image(q):
 
 
 #------------------------------------------------------------------------------------------------------------
-
-time_list = [0]
-pos_x_list = [0]
-pos_y_list = [0]
-pos_z_list = [0]
-ori_x_list = [0]
-ori_y_list = [0]
-ori_z_list = [0]
 
 
 def graph_values():
@@ -361,29 +310,58 @@ def graph_values():
 
     
 
+#------------------------------------------------------------------------------------------------------------
+
 
 if __name__ == '__main__':
 
-    q1 = Queue()
-    p1 = Process(target=joint_control, args=(q1,))
-    p1.start()
+    def position_cb(data):
+        if position_cb_enable:
+            global pos_x
+            global pos_y
+            global pos_z
+            global got_position
 
-    q2 = Queue()
-    p2 = Process(target=process_image, args=(q2,))
-    p2.start()
+            pos_x = data.x
+            pos_y = data.y
+            pos_z = data.z
 
-    q3 = Queue()
-    p3 = Process(target=graph_values, args=[])
-    p3.start()
+            got_position = True
+            # print("Position   : x:", data.x, "   y:", data.y, "   :", data.z)
     
-    rospy.init_node('hugo_main')
-    q_size = 10
 
-    sync_publisher = rospy.Publisher("/enableSyncMode", Bool, queue_size=q_size)#, latch=True)
-    start_publisher = rospy.Publisher("/startSimulation", Bool, queue_size=q_size)#, latch=True)
-    stop_publisher = rospy.Publisher("/stopSimulation", Bool, queue_size=q_size)#, latch=True)
-    step_publisher = rospy.Publisher("/triggerNextStep", Bool, queue_size=q_size)#, latch=True)
+
+    def orientation_cb(data):
+        if orientation_cb_enable:
+            global ori_x
+            global ori_y
+            global ori_z
+            global got_orientiation 
+
+            ori_x = math.degrees(data.x)
+            ori_y = math.degrees(data.y)
+            ori_z = math.degrees(data.z)
+
+            ori_x = data.x
+            ori_y = data.y
+            ori_z = data.z
+            
+            got_orientiation = True
+            # print("Orientation   : x:", data.x, "   y:", data.y, "   :", data.z)
+
+
+
+    def simTime_cb(msg):
+        # print("Simulation time: ",msg)
+        return
+
+
+
+    def simState_cb(msg):
+        # print("Simulation state: ",msg)
+        return
     
+
 
     def step_cb(msg):
         global got_position
@@ -418,7 +396,7 @@ if __name__ == '__main__':
     
 
     #Ctrl-C handling
-    def signal_handler(*args):
+    def sigint_handler(*args):
         print("\nexiting!!!")
         stop_publisher.publish(z)
         p1.kill()
@@ -428,10 +406,35 @@ if __name__ == '__main__':
         print("Processes should be joined by now")
         exit(0)
 
-    def visu_cb(msg):
-        print(msg.data[0])
-        print("callback working")
 
+
+    def sigquit_handler(*args):
+        print("You pressed Ctrl + \\")
+
+
+    # def sigstop_handler(*args):
+    #     print("You pressed Ctrl + Z")
+
+    q1 = Queue()
+    p1 = Process(target=joint_control, args=(q1,))
+    p1.start()
+
+    q2 = Queue()
+    p2 = Process(target=process_image, args=(q2,))
+    p2.start()
+
+    q3 = Queue()
+    p3 = Process(target=graph_values, args=[])
+    p3.start()
+    
+    rospy.init_node('hugo_main')
+    q_size = 10
+
+    sync_publisher = rospy.Publisher("/enableSyncMode", Bool, queue_size=q_size)#, latch=True)
+    start_publisher = rospy.Publisher("/startSimulation", Bool, queue_size=q_size)#, latch=True)
+    stop_publisher = rospy.Publisher("/stopSimulation", Bool, queue_size=q_size)#, latch=True)
+    step_publisher = rospy.Publisher("/triggerNextStep", Bool, queue_size=q_size)#, latch=True)
+    
     rospy.Subscriber("/simulationStepDone", Bool, step_cb, queue_size = q_size)#, latch=True)
     rospy.Subscriber("/simulationTime", Float32, simTime_cb, queue_size = q_size)
     rospy.Subscriber('/robPosition', Point32, position_cb, queue_size = q_size)
@@ -448,7 +451,10 @@ if __name__ == '__main__':
     z = Bool(True)
     # z.data = True
 
-    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGINT, sigint_handler)
+    signal.signal(signal.SIGQUIT, sigquit_handler)
+    # signal.signal(signal.SIGSTOP, sigstop_handler) #TODO
+
     sync_publisher.publish(z)   #synchronize
     time.sleep(0.1)
     start_publisher.publish(z)  #start simulation
@@ -457,7 +463,7 @@ if __name__ == '__main__':
     time.sleep(0.1) #original value 5
 
 
-    time.sleep(5)
+    time.sleep(2)
 
 
     print("main thread")
