@@ -14,6 +14,14 @@ from multiprocessing import Process, Queue
 import signal
 import _thread
 import matplotlib.pyplot as plt
+import matplotlib 
+
+# matplotlib.use('TkAgg') 
+# 
+# def prevent_focus_steal(event):
+#     event.widget.lower()
+
+plt.ioff()
 
 # Instantiate CvBridge
 bridge = CvBridge()
@@ -29,7 +37,6 @@ pos_z_list = []
 ori_x_list = []
 ori_y_list = []
 ori_z_list = []
-
 
 
 pos_x = 0
@@ -196,7 +203,7 @@ if __name__ == '__main__':
 
 
     def signal_handler(*args):
-        print("\nexiting!!!")
+        print("\n exiting!!!")
         stop_publisher.publish(z)
         exit(0)
 
@@ -245,6 +252,9 @@ if __name__ == '__main__':
     print("main thread")
 
     fig, axs = plt.subplots(2, 3, clear=True)
+
+    # fig = plt.figure()
+    # fig.canvas.mpl_connect('draw_event', prevent_focus_steal)
 
     rate = rospy.Rate(30)
     while not rospy.is_shutdown():
