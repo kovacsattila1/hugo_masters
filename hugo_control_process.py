@@ -310,24 +310,37 @@ def graph_values():
         global ori_y_list
         global ori_z_list
 
-        print(time_list[-1])
+        pos_min = min([min(pos_x_list), min(pos_y_list), min(pos_z_list)])
+        pos_max = max([max(pos_x_list), max(pos_y_list), max(pos_z_list)])
 
-        ax1.set_ylim(min(pos_x_list) - graph_padding, max(pos_x_list) + graph_padding)
+        padded_pos_min = pos_min - graph_padding
+        padded_pos_max = pos_max + graph_padding
+
+
+        ori_min = min([min(ori_x_list), min(ori_y_list), min(ori_z_list)])
+        ori_max = max([max(ori_x_list), max(ori_y_list), max(ori_z_list)])
+
+        padded_ori_min = ori_min - graph_padding
+        padded_ori_max = ori_max + graph_padding
+
+
+
+        ax1.set_ylim(padded_pos_min, padded_pos_max)
         ax1.set_xlim(0, time_list[-1])
 
-        ax2.set_ylim(min(pos_y_list) - graph_padding, max(pos_y_list) + graph_padding)
+        ax2.set_ylim(padded_pos_min, padded_pos_max)
         ax2.set_xlim(0, time_list[-1])
 
-        ax3.set_ylim(min(pos_z_list) - graph_padding, max(pos_z_list) + graph_padding)
+        ax3.set_ylim(padded_pos_min, padded_pos_max)
         ax3.set_xlim(0, time_list[-1])
 
-        ax4.set_ylim(min(ori_x_list) - graph_padding, max(ori_x_list) + graph_padding)
+        ax4.set_ylim(padded_ori_min, padded_ori_max)
         ax4.set_xlim(0, time_list[-1])
 
-        ax5.set_ylim(min(ori_y_list) - graph_padding, max(ori_y_list) + graph_padding)
+        ax5.set_ylim(padded_ori_min, padded_ori_max)
         ax5.set_xlim(0, time_list[-1])
 
-        ax6.set_ylim(min(ori_z_list) - graph_padding, max(ori_z_list) + graph_padding)
+        ax6.set_ylim(padded_ori_min, padded_ori_max)
         ax6.set_xlim(0, time_list[-1])
 
         lines[0].set_ydata(pos_x_list)
@@ -341,8 +354,6 @@ def graph_values():
 
         for line in lines:
             line.set_xdata(time_list)
-
-        print(len(pos_x_list), len(time_list))
 
         fig.canvas.draw() 
         fig.canvas.flush_events() 
