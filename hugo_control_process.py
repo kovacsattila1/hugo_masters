@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import torch.multiprocessing.queue
 import rospy
 from sensor_msgs.msg import Image # ROS Image message -> OpenCV2 image converter
 from cv_bridge import CvBridge, CvBridgeError # OpenCV2 for saving an image
@@ -19,7 +20,18 @@ import matplotlib.pyplot as plt
 import random
 import matplotlib.pyplot as plt
 import numpy as np
+from ddpg import DDPG
+import logging
+import torch
+from utils.replay_memory import ReplayMemory, Transition
+from utils.noise import OrnsteinUhlenbeckActionNoise
+from torch.utils.tensorboard import SummaryWriter
+import torch.multiprocessing as mp
+# import torch.multiprocessing.queue as queue
+# from multiprocessing import Manager
 
+logger = logging.getLogger('train')
+logger.setLevel(logging.DEBUG)
 
 # Instantiate CvBridge
 bridge = CvBridge()
@@ -38,97 +50,222 @@ ori_x_list = [0]
 ori_y_list = [0]
 ori_z_list = [0]
 
+pos_x = 0
+pos_y = 0
+pos_z = 0
+ori_x = 0
+ori_y = 0
+ori_z = 0
+
+
+
 
 #------------------------------------------------------------------------------------------------------------
 
-def joint_control(q):
-    rospy.init_node('hugo_control')
-
-    q_size = 10
-
-    joint_publisher1 = rospy.Publisher('/head_x_joint', Float32, queue_size=q_size)
-    joint_publisher2 = rospy.Publisher('/head_y_joint', Float32, queue_size=q_size)
-    joint_publisher3 = rospy.Publisher('/head_z_joint', Float32, queue_size=q_size)
-    joint_publisher4 = rospy.Publisher('/right_shoulder_rotate_joint', Float32, queue_size=q_size)
-    joint_publisher5 = rospy.Publisher('/right_shoulder_sideways_joint', Float32, queue_size=q_size)
-    joint_publisher6 = rospy.Publisher('/right_elbow_joint', Float32, queue_size=q_size)
-    joint_publisher7 = rospy.Publisher('/right_wrist_joint', Float32, queue_size=q_size)
-    joint_publisher8 = rospy.Publisher('/left_shoulder_rotate_joint', Float32, queue_size=q_size)
-    joint_publisher9 = rospy.Publisher('/left_shoulder_sideways_joint', Float32, queue_size=q_size)
-    joint_publisher10 = rospy.Publisher('/left_elbow_joint', Float32, queue_size=q_size)
-    joint_publisher11 = rospy.Publisher('/left_wrist_joint', Float32, queue_size=q_size)
-    joint_publisher12 = rospy.Publisher('/waist_x_joint', Float32, queue_size=q_size)
-    joint_publisher13 = rospy.Publisher('/waist_y_joint', Float32, queue_size=q_size)
-    joint_publisher14 = rospy.Publisher('/waist_z_joint', Float32, queue_size=q_size)
-    joint_publisher15 = rospy.Publisher('/right_hip_sideways_joint', Float32, queue_size=q_size)
-    joint_publisher16 = rospy.Publisher('/right_hip_forward_joint', Float32, queue_size=q_size)
-    joint_publisher17 = rospy.Publisher('/right_thight_joint', Float32, queue_size=q_size)
-    joint_publisher18 = rospy.Publisher('/right_knee_joint', Float32, queue_size=q_size)
-    joint_publisher19 = rospy.Publisher('/right_upper_ankle_joint', Float32, queue_size=q_size)
-    joint_publisher20 = rospy.Publisher('/right_lower_ankle_joint', Float32, queue_size=q_size)
-    joint_publisher21 = rospy.Publisher('/left_hip_sideways_joint', Float32, queue_size=q_size)
-    joint_publisher22 = rospy.Publisher('/left_hip_forward_joint', Float32, queue_size=q_size)
-    joint_publisher23 = rospy.Publisher('/left_thight_joint', Float32, queue_size=q_size)
-    joint_publisher24 = rospy.Publisher('/left_knee_joint', Float32, queue_size=q_size)
-    joint_publisher25 = rospy.Publisher('/left_upper_ankle_joint', Float32, queue_size=q_size)
-    joint_publisher26 = rospy.Publisher('/left_lower_ankle_joint', Float32, queue_size=q_size)
-    rate = rospy.Rate(10)
-
-    i = 0
-    while not rospy.is_shutdown():
-
-        # print(q.empty())
-        # print("hello hello")
-        # if q.empty():
-        #     print("Nothing in queue of joint_control")
-        # nothing = q.get()
-
-        # print(q.get())
-        q.get()
-
-        #NAIVE CONTROL
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        joint_pos = [math.sin(i)] * 26
-        i += 0.1
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+def joint_control(m2s, s2m):
+    print("torch process started!!!", flush=True)
+    # rospy.init_node('hugo_control')
+    # q_size = 10
+    # rospy.Subscriber("/simulationStepDone", Bool, step_cb, queue_size = q_size)#, latch=True)
 
 
-        #NEURAL NETWORK CONTROL
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    writer = SummaryWriter('runs/run_1')
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
+    logger.info("Using {}".format(device))
+    checkpoint_dir = '.'
+    seed = 42
 
-        #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- 
-        joint_publisher1.publish(joint_pos[0])
-        joint_publisher2.publish(joint_pos[1])
-        joint_publisher3.publish(joint_pos[2])
-        joint_publisher4.publish(joint_pos[3])
-        joint_publisher5.publish(joint_pos[4])
-        joint_publisher6.publish(joint_pos[5])
-        joint_publisher7.publish(joint_pos[6])
-        joint_publisher8.publish(joint_pos[7])
-        joint_publisher9.publish(joint_pos[8])
-        joint_publisher10.publish(joint_pos[9])
-        joint_publisher11.publish(joint_pos[10])
-        joint_publisher12.publish(joint_pos[11])
-        joint_publisher13.publish(joint_pos[12])
-        joint_publisher14.publish(joint_pos[13])
-        joint_publisher15.publish(joint_pos[14])
-        joint_publisher16.publish(joint_pos[15])
-        joint_publisher17.publish(joint_pos[16])
-        joint_publisher18.publish(joint_pos[17])
-        joint_publisher19.publish(joint_pos[18])
-        joint_publisher20.publish(joint_pos[19])
-        joint_publisher21.publish(joint_pos[20])
-        joint_publisher22.publish(joint_pos[21])
-        joint_publisher23.publish(joint_pos[22])
-        joint_publisher24.publish(joint_pos[23])
-        joint_publisher25.publish(joint_pos[24])
-        joint_publisher26.publish(joint_pos[25])
+    torch.manual_seed(seed)
 
-        q.put("hello from joint_control")
-        # print("joint control thread joint control thread joint control thread ")
-        rate.sleep()
-        # rospy.sleep(0.1)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+
+    gamma = 0.99
+    tau = default=0.001
+    hidden_size = [400, 300]
+    observation_space_dim = 6
+    action_space_dim = 26
+    replay_size = 1e6
+    noise_stddev = 0.2
+    load_model = False
+    timesteps = 1e6
+    n_test_cycles = 10
+    batch_size = 1
+    done = 0
+    reward_threshold = 1
+
+    agent = DDPG(gamma,
+                tau,
+                hidden_size,
+                observation_space_dim,
+                action_space_dim,
+                checkpoint_dir=checkpoint_dir
+                )
+    memory = ReplayMemory(int(replay_size))
+
+    nb_actions = action_space_dim
+    ou_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(nb_actions),
+                                            sigma=float(noise_stddev) * np.ones(nb_actions))
+
+
+
+
+    # Define counters and other variables
+    start_step = 0
+    # timestep = start_step
+    if load_model:
+        # Load agent if necessary
+        start_step, memory = agent.load_checkpoint()
+    timestep = start_step // 10000 + 1
+    rewards, policy_losses, value_losses, mean_test_rewards = [], [], [], []
+    epoch = 0
+    t = 0
+    time_last_checkpoint = time.time()
+
+    # Start training
+    # logger.info('Train agent on {} env'.format({env.unwrapped.spec.id}))
+    logger.info('Doing {} timesteps'.format(timesteps))
+    logger.info('Start at timestep {0} with t = {1}'.format(timestep, t))
+    logger.info('Start training at {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
+
+
+
+
+    while timestep <= timesteps:
+        ou_noise.reset()
+        epoch_return = 0
+
+
+        #get state first
+        #reset the simulator
+        #take a step
+        # initial_state = 
+
+        #TODO
+        #signal that it's first step
+        # print("entering waiting", flush=True)
+        # print(list(q.queue))
+        mystate = m2s.get()
+        # print("waiting ended", flush=True)
+        state = torch.Tensor(mystate).to(device)
+        state = state.unsqueeze(0)
+
+        while True:
+            # if args.render_train:
+            #     env.render()
+            state.squeeze()
+            action = agent.calc_action(state, ou_noise)
+            print("joint control action shape", action.shape)
+
+            s2m.put(action)
+
+
+            #get next state
+            #get reward
+            #get done
+            # next_state, reward, done, _ = env.step(action.cpu().numpy()[0]) 
+            next_state = m2s.get()
+            reward = m2s.get()
+            done = m2s.get()
+
+            timestep += 1
+            epoch_return += reward
+
+            mask = torch.Tensor([done]).to(device)
+            reward = torch.Tensor([reward]).to(device)
+            next_state = torch.Tensor([next_state]).to(device)
+
+            memory.push(state, action, mask, next_state, reward)
+
+            state = next_state
+
+            epoch_value_loss = 0
+            epoch_policy_loss = 0
+
+            if len(memory) > batch_size:
+                transitions = memory.sample(batch_size)
+                # Transpose the batch
+                # (see http://stackoverflow.com/a/19343/3343043 for detailed explanation).
+                batch = Transition(*zip(*transitions))
+
+                # Update actor and critic according to the batch
+                value_loss, policy_loss = agent.update_params(batch)
+
+                epoch_value_loss += value_loss
+                epoch_policy_loss += policy_loss
+
+            if done:
+                break
+
+        rewards.append(epoch_return)
+        value_losses.append(epoch_value_loss)
+        policy_losses.append(epoch_policy_loss)
+        writer.add_scalar('epoch/return', epoch_return, epoch)
+
+        # Test every 10th episode (== 1e4) steps for a number of test_epochs epochs
+        if timestep >= 10000 * t:
+            t += 1
+            test_rewards = []
+            for _ in range(n_test_cycles):
+                #get state first
+                #reset the simulator
+                #take a step
+                #initial_state = 
+                # state = torch.Tensor([env.reset()]).to(device)
+                test_reward = 0
+                while True:
+                    # if args.render_eval:
+                    #     env.render()
+
+                    action = agent.calc_action(state)  # Selection without noise
+
+                    #TODO
+                    # next_state, reward, done, _ = env.step(action.cpu().numpy()[0])
+                    test_reward += reward
+
+                    next_state = torch.Tensor(next_state).to(device)
+
+                    state = next_state
+                    if done:
+                        break
+                test_rewards.append(test_reward)
+
+            mean_test_rewards.append(np.mean(test_rewards))
+
+            for name, param in agent.actor.named_parameters():
+                writer.add_histogram(name, param.clone().cpu().data.numpy(), epoch)
+            for name, param in agent.critic.named_parameters():
+                writer.add_histogram(name, param.clone().cpu().data.numpy(), epoch)
+
+            writer.add_scalar('test/mean_test_return', mean_test_rewards[-1], epoch)
+            logger.info("Epoch: {}, current timestep: {}, last reward: {}, "
+                        "mean reward: {}, mean test reward {}".format(epoch,
+                                                                        timestep,
+                                                                        rewards[-1],
+                                                                        np.mean(rewards[-10:]),
+                                                                        np.mean(test_rewards)))
+
+            # Save if the mean of the last three averaged rewards while testing
+            # is greater than the specified reward threshold
+            # TODO: Option if no reward threshold is given
+            if np.mean(mean_test_rewards[-3:]) >= reward_threshold:
+                agent.save_checkpoint(timestep, memory)
+                time_last_checkpoint = time.time()
+                logger.info('Saved model at {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
+
+        epoch += 1
+
+    agent.save_checkpoint(timestep, memory)
+    logger.info('Saved model at endtime {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
+    logger.info('Stopping training at {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
+    
+    #TODO 
+    # close the simulator session
+    # env.close()
 
 #------------------------------------------------------------------------------------------------------------
 
@@ -275,22 +412,22 @@ def graph_values():
 
 
         ax1.set_ylim(padded_pos_min, padded_pos_max)
-        ax1.set_xlim(0, time_list[-1])
+        ax1.set_xlim(-0.1, time_list[-1])
 
         ax2.set_ylim(padded_pos_min, padded_pos_max)
-        ax2.set_xlim(0, time_list[-1])
+        ax2.set_xlim(-0.1, time_list[-1])
 
         ax3.set_ylim(padded_pos_min, padded_pos_max)
-        ax3.set_xlim(0, time_list[-1])
+        ax3.set_xlim(-0.1, time_list[-1])
 
         ax4.set_ylim(padded_ori_min, padded_ori_max)
-        ax4.set_xlim(0, time_list[-1])
+        ax4.set_xlim(-0.1, time_list[-1])
 
         ax5.set_ylim(padded_ori_min, padded_ori_max)
-        ax5.set_xlim(0, time_list[-1])
+        ax5.set_xlim(-0.1, time_list[-1])
 
         ax6.set_ylim(padded_ori_min, padded_ori_max)
-        ax6.set_xlim(0, time_list[-1])
+        ax6.set_xlim(-0.1, time_list[-1])
 
         lines[0].set_ydata(pos_x_list)
         lines[0].set_xdata(time_list)
@@ -314,6 +451,46 @@ def graph_values():
 
 
 if __name__ == '__main__':
+
+
+    first = 1
+
+    def map_to_discrete_range(value):
+        input_min, input_max = -1, 1
+        output_min, output_max = 0, 180
+
+        # Clip the value to the input range
+        value = np.clip(value, input_min, input_max)
+        
+        # Normalize the value to a 0-1 range
+        normalized_value = (value - input_min) / (input_max - input_min)
+        
+        # Scale to the output range and round to the nearest integer
+        discrete_value = np.round(normalized_value * (output_max - output_min) + output_min).astype(float)
+        
+        return discrete_value
+
+
+    #Ctrl-C handling
+    def sigint_handler(*args):
+        print("\nexiting!!!")
+        stop_publisher.publish(z)
+        p1.kill()
+        p2.kill()
+        p1.join()
+        p2.join()
+        print("Processes should be joined by now")
+        exit(0)
+
+
+
+    def sigquit_handler(*args):
+        print("You pressed Ctrl + \\")
+
+
+    # def sigstop_handler(*args):
+    #     print("You pressed Ctrl + Z")
+
 
     def position_cb(data):
         if position_cb_enable:
@@ -362,11 +539,27 @@ if __name__ == '__main__':
         return
     
 
+    def reward_function(state):
+        return 1
+    
+
+    def is_it_done(state):
+        return 0
+    
 
     def step_cb(msg):
+        print("\n\n\n\n\n\nStep callback called")
+        global first
         global got_position
         global got_orientiation
-        global q1
+        global m2s
+        global s2m
+        global ori_x
+        global ori_y
+        global ori_z
+        global pos_x
+        global pos_y
+        global pos_z
 
         # print("step done")
 
@@ -380,10 +573,53 @@ if __name__ == '__main__':
         got_orientiation = False
 
         #send signal to publish new positions
-        q1.put("hello from main")
+        state = [pos_x, pos_y, pos_z, ori_x, ori_y, ori_z]
+
+        if first:
+            m2s.put(state)
+            # print("Put done in main", flush=True)
+            first = 0
+        else:
+            m2s.put(state)
+            reward = reward_function(state)
+            m2s.put(reward)
+            done = is_it_done(state)
+            m2s.put(done)
+
+        action = s2m.get(block=True)
+
+        print("main - action", action)
+        mapped_action = list(map(map_to_discrete_range, action[0].tolist()))
+        # print("mapped_action", mapped_action)
+
+        joint_publisher1.publish(mapped_action[0])
+        joint_publisher2.publish(mapped_action[1])
+        joint_publisher3.publish(mapped_action[2])
+        joint_publisher4.publish(mapped_action[3])
+        joint_publisher5.publish(mapped_action[4])
+        joint_publisher6.publish(mapped_action[5])
+        joint_publisher7.publish(mapped_action[6])
+        joint_publisher8.publish(mapped_action[7])
+        joint_publisher9.publish(mapped_action[8])
+        joint_publisher10.publish(mapped_action[9])
+        joint_publisher11.publish(mapped_action[10])
+        joint_publisher12.publish(mapped_action[11])
+        joint_publisher13.publish(mapped_action[12])
+        joint_publisher14.publish(mapped_action[13])
+        joint_publisher15.publish(mapped_action[14])
+        joint_publisher16.publish(mapped_action[15])
+        joint_publisher17.publish(mapped_action[16])
+        joint_publisher18.publish(mapped_action[17])
+        joint_publisher19.publish(mapped_action[18])
+        joint_publisher20.publish(mapped_action[19])
+        joint_publisher21.publish(mapped_action[20])
+        joint_publisher22.publish(mapped_action[21])
+        joint_publisher23.publish(mapped_action[22])
+        joint_publisher24.publish(mapped_action[23])
+        joint_publisher25.publish(mapped_action[24])
+        joint_publisher26.publish(mapped_action[25])
 
         #wait for the response
-        response = q1.get()
         # print(response)
 
         # time.sleep(0.5)
@@ -395,37 +631,34 @@ if __name__ == '__main__':
         return
     
 
-    #Ctrl-C handling
-    def sigint_handler(*args):
-        print("\nexiting!!!")
-        stop_publisher.publish(z)
-        p1.kill()
-        p2.kill()
-        p1.join()
-        p2.join()
-        print("Processes should be joined by now")
-        exit(0)
 
 
 
-    def sigquit_handler(*args):
-        print("You pressed Ctrl + \\")
 
 
-    # def sigstop_handler(*args):
-    #     print("You pressed Ctrl + Z")
 
-    q1 = Queue()
-    p1 = Process(target=joint_control, args=(q1,))
+
+    # dummy_joint_control("something")
+
+
+    mp.set_start_method('spawn')
+    # manager = mp.Manager()
+    m2s = mp.Queue()
+    s2m = mp.Queue()
+
+    p1 = mp.Process(target=joint_control, args=(m2s, s2m), daemon=True)
+    # p1 = Process(target=joint_control, args=(q1,))
     p1.start()
 
-    q2 = Queue()
-    p2 = Process(target=process_image, args=(q2,))
-    p2.start()
+    time.sleep(3) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 
-    q3 = Queue()
-    p3 = Process(target=graph_values, args=[])
-    p3.start()
+    # q2 = Queue()
+    # p2 = Process(target=process_image, args=(q2,))
+    # p2.start()
+
+    # q3 = Queue()
+    # p3 = Process(target=graph_values, args=[])
+    # p3.start()
     
     rospy.init_node('hugo_main')
     q_size = 10
@@ -440,6 +673,35 @@ if __name__ == '__main__':
     rospy.Subscriber('/robPosition', Point32, position_cb, queue_size = q_size)
     rospy.Subscriber('/robOrientation', Point32, orientation_cb, queue_size = q_size)
     rospy.Subscriber("/simulationState", Int32, simState_cb)
+
+
+    joint_publisher1 = rospy.Publisher('/head_x_joint', Float32, queue_size=q_size)
+    joint_publisher2 = rospy.Publisher('/head_y_joint', Float32, queue_size=q_size)
+    joint_publisher3 = rospy.Publisher('/head_z_joint', Float32, queue_size=q_size)
+    joint_publisher4 = rospy.Publisher('/right_shoulder_rotate_joint', Float32, queue_size=q_size)
+    joint_publisher5 = rospy.Publisher('/right_shoulder_sideways_joint', Float32, queue_size=q_size)
+    joint_publisher6 = rospy.Publisher('/right_elbow_joint', Float32, queue_size=q_size)
+    joint_publisher7 = rospy.Publisher('/right_wrist_joint', Float32, queue_size=q_size)
+    joint_publisher8 = rospy.Publisher('/left_shoulder_rotate_joint', Float32, queue_size=q_size)
+    joint_publisher9 = rospy.Publisher('/left_shoulder_sideways_joint', Float32, queue_size=q_size)
+    joint_publisher10 = rospy.Publisher('/left_elbow_joint', Float32, queue_size=q_size)
+    joint_publisher11 = rospy.Publisher('/left_wrist_joint', Float32, queue_size=q_size)
+    joint_publisher12 = rospy.Publisher('/waist_x_joint', Float32, queue_size=q_size)
+    joint_publisher13 = rospy.Publisher('/waist_y_joint', Float32, queue_size=q_size)
+    joint_publisher14 = rospy.Publisher('/waist_z_joint', Float32, queue_size=q_size)
+    joint_publisher15 = rospy.Publisher('/right_hip_sideways_joint', Float32, queue_size=q_size)
+    joint_publisher16 = rospy.Publisher('/right_hip_forward_joint', Float32, queue_size=q_size)
+    joint_publisher17 = rospy.Publisher('/right_thight_joint', Float32, queue_size=q_size)
+    joint_publisher18 = rospy.Publisher('/right_knee_joint', Float32, queue_size=q_size)
+    joint_publisher19 = rospy.Publisher('/right_upper_ankle_joint', Float32, queue_size=q_size)
+    joint_publisher20 = rospy.Publisher('/right_lower_ankle_joint', Float32, queue_size=q_size)
+    joint_publisher21 = rospy.Publisher('/left_hip_sideways_joint', Float32, queue_size=q_size)
+    joint_publisher22 = rospy.Publisher('/left_hip_forward_joint', Float32, queue_size=q_size)
+    joint_publisher23 = rospy.Publisher('/left_thight_joint', Float32, queue_size=q_size)
+    joint_publisher24 = rospy.Publisher('/left_knee_joint', Float32, queue_size=q_size)
+    joint_publisher25 = rospy.Publisher('/left_upper_ankle_joint', Float32, queue_size=q_size)
+    joint_publisher26 = rospy.Publisher('/left_lower_ankle_joint', Float32, queue_size=q_size)
+    rate = rospy.Rate(10)
 
 
     position_cb_enable = True
@@ -463,7 +725,7 @@ if __name__ == '__main__':
     time.sleep(0.1) #original value 5
 
 
-    time.sleep(2)
+    # time.sleep(2) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
     print("main thread")
@@ -471,7 +733,6 @@ if __name__ == '__main__':
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         # print("main thread main thread main thread main thread")
-        # q1.put("hello")
         rate.sleep()
 
     stop_publisher.publish(z)
