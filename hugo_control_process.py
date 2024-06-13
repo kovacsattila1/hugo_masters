@@ -548,7 +548,6 @@ if __name__ == '__main__':
     
 
     def step_cb(msg):
-        print("\n\n\n\n\n\nStep callback called")
         global first
         global got_position
         global got_orientiation
@@ -561,7 +560,6 @@ if __name__ == '__main__':
         global pos_y
         global pos_z
 
-        # print("step done")
 
         while not got_position and not got_orientiation:
             time.sleep(0.001)
@@ -577,7 +575,6 @@ if __name__ == '__main__':
 
         if first:
             m2s.put(state)
-            # print("Put done in main", flush=True)
             first = 0
         else:
             m2s.put(state)
@@ -588,9 +585,7 @@ if __name__ == '__main__':
 
         action = s2m.get(block=True)
 
-        print("main - action", action)
         mapped_action = list(map(map_to_discrete_range, action[0].tolist()))
-        # print("mapped_action", mapped_action)
 
         joint_publisher1.publish(mapped_action[0])
         joint_publisher2.publish(mapped_action[1])
@@ -619,14 +614,8 @@ if __name__ == '__main__':
         joint_publisher25.publish(mapped_action[24])
         joint_publisher26.publish(mapped_action[25])
 
-        #wait for the response
-        # print(response)
 
-        # time.sleep(0.5)
-
-        #we can make a step with the simulator
         step_publisher.publish(z)
-        # time.sleep(5)
         
         return
     
@@ -650,15 +639,15 @@ if __name__ == '__main__':
     # p1 = Process(target=joint_control, args=(q1,))
     p1.start()
 
-    time.sleep(3) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+    # time.sleep(3) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 
-    # q2 = Queue()
-    # p2 = Process(target=process_image, args=(q2,))
-    # p2.start()
+    q2 = Queue()
+    p2 = Process(target=process_image, args=(q2,))
+    p2.start()
 
-    # q3 = Queue()
-    # p3 = Process(target=graph_values, args=[])
-    # p3.start()
+    q3 = Queue()
+    p3 = Process(target=graph_values, args=[])
+    p3.start()
     
     rospy.init_node('hugo_main')
     q_size = 10
