@@ -70,8 +70,11 @@ def joint_control(m2s, s2m):
 
 
     writer = SummaryWriter('runs/run_1')
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cpu")
+
+
     logger.info("Using {}".format(device))
     checkpoint_dir = '.'
     seed = 42
@@ -87,7 +90,7 @@ def joint_control(m2s, s2m):
     gamma = 0.99
     tau = default=0.001
     hidden_size = [400, 300]
-    observation_space_dim = 6
+    observation_space_dim = 36
     action_space_dim = 26
     replay_size = 1e6
     noise_stddev = 0.2
@@ -158,11 +161,10 @@ def joint_control(m2s, s2m):
             # if args.render_train:
             #     env.render()
             state.squeeze()
+            print(state)
             action = agent.calc_action(state, ou_noise)
-            print("joint control action shape", action.shape)
 
             s2m.put(action)
-
 
             #get next state
             #get reward
@@ -455,9 +457,33 @@ if __name__ == '__main__':
 
     first = 1
 
+
+    def shift_elements(lst, new_elements):
+        """
+        Shifts three new elements into a list of length 18, initially filled with zeros.
+        
+        Parameters:
+        lst (list): The original list of length 18.
+        new_elements (list): A list of three new elements to be added.
+        
+        Returns:
+        list: The updated list after shifting in the new elements.
+        """
+        if len(lst) != 18:
+            raise ValueError("The original list must be of length 18.")
+        if len(new_elements) != 3:
+            raise ValueError("The new elements list must contain exactly three elements.")
+    
+        # Remove the last three elements
+        lst = lst[:-3]
+        # Add the new elements to the front
+        lst = new_elements + lst
+        return lst
+
+
     def map_to_discrete_range(value):
         input_min, input_max = -1, 1
-        output_min, output_max = 0, 180
+        output_min, output_max = -1, 1
 
         # Clip the value to the input range
         value = np.clip(value, input_min, input_max)
@@ -486,6 +512,9 @@ if __name__ == '__main__':
 
     def sigquit_handler(*args):
         print("You pressed Ctrl + \\")
+
+        # puse_publisher.publish(Bool(pause_flag))
+        # pause_flag = not pause_flag
 
 
     # def sigstop_handler(*args):
@@ -535,7 +564,9 @@ if __name__ == '__main__':
 
 
     def simState_cb(msg):
-        # print("Simulation state: ",msg)
+        global sim_state
+        print("Simulation state: ",msg)
+        sim_state = msg
         return
     
 
@@ -545,6 +576,21 @@ if __name__ == '__main__':
 
     def is_it_done(state):
         return 0
+    
+    def if_fallen_restart(pos):
+        global sim_state
+        if pos[2] < 0.15:
+            stop_publisher.publish(Bool(True))
+            # time.sleep(0.5)
+            while sim_state == 1:
+                time.sleep(0.001)
+                # print("waiting for restart")
+            # print("restarted!!!")
+            sync_publisher.publish(Bool(True))
+            time.sleep(0.1)
+            start_publisher.publish(Bool(True))  #start simulation
+            time.sleep(0.1)
+            step_publisher.publish(Bool(True)) #trigger next step
     
 
     def step_cb(msg):
@@ -559,19 +605,28 @@ if __name__ == '__main__':
         global pos_x
         global pos_y
         global pos_z
+        global pos_shift_reg
+        global ori_shift_reg
 
 
         while not got_position and not got_orientiation:
             time.sleep(0.001)
 
-        # print(got_position, got_orientiation)
-        
+
         #setting default values for next cycle
         got_position = False
         got_orientiation = False
 
         #send signal to publish new positions
-        state = [pos_x, pos_y, pos_z, ori_x, ori_y, ori_z]
+        actual_pos = [pos_x, pos_y, pos_z]
+        pos_shift_reg = shift_elements(pos_shift_reg, actual_pos)
+        actual_ori = [ori_x, ori_y, ori_z]
+        ori_shift_reg = shift_elements(ori_shift_reg, actual_ori)
+        state = [*pos_shift_reg, *ori_shift_reg]
+
+
+        if_fallen_restart(actual_pos)
+
 
         if first:
             m2s.put(state)
@@ -580,12 +635,18 @@ if __name__ == '__main__':
             m2s.put(state)
             reward = reward_function(state)
             m2s.put(reward)
-            done = is_it_done(state)
+            done = is_it_done(actual_pos)
             m2s.put(done)
 
         action = s2m.get(block=True)
 
-        mapped_action = list(map(map_to_discrete_range, action[0].tolist()))
+        # mapped_action = list(map(map_to_discrete_range, action[0].tolist()))
+
+        mapped_action = action[0].tolist()
+        mapped_action = [x / 30.0 for x in mapped_action]
+
+
+    
 
         joint_publisher1.publish(mapped_action[0])
         joint_publisher2.publish(mapped_action[1])
@@ -616,6 +677,8 @@ if __name__ == '__main__':
 
 
         step_publisher.publish(z)
+
+        time.sleep(1)
         
         return
     
@@ -624,7 +687,11 @@ if __name__ == '__main__':
 
 
 
+    pos_shift_reg = [0] * 18
+    ori_shift_reg = [0] * 18
 
+    pause_flag = True
+    sim_state = 0
 
 
     # dummy_joint_control("something")
@@ -641,9 +708,9 @@ if __name__ == '__main__':
 
     # time.sleep(3) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 
-    q2 = Queue()
-    p2 = Process(target=process_image, args=(q2,))
-    p2.start()
+    # q2 = Queue()
+    # p2 = Process(target=process_image, args=(q2,))
+    # p2.start()
 
     q3 = Queue()
     p3 = Process(target=graph_values, args=[])
@@ -656,6 +723,7 @@ if __name__ == '__main__':
     start_publisher = rospy.Publisher("/startSimulation", Bool, queue_size=q_size)#, latch=True)
     stop_publisher = rospy.Publisher("/stopSimulation", Bool, queue_size=q_size)#, latch=True)
     step_publisher = rospy.Publisher("/triggerNextStep", Bool, queue_size=q_size)#, latch=True)
+    puse_publisher = rospy.Publisher("/pauseSimulation", Bool, queue_size=q_size)
     
     rospy.Subscriber("/simulationStepDone", Bool, step_cb, queue_size = q_size)#, latch=True)
     rospy.Subscriber("/simulationTime", Float32, simTime_cb, queue_size = q_size)

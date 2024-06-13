@@ -60,7 +60,6 @@ class Actor(nn.Module):
 
         # Output
         mu = torch.tanh(self.mu(x))
-        print("mydebug", mu)
         return mu
 
 
