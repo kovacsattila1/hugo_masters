@@ -282,7 +282,7 @@ function sysCall_actuation()
         p=sim.getObjectPosition(bodySensor, worldSensor)
         simROS.publish(positionPub,{x=p[1],y=p[2],z=p[3]})
         o=sim.getObjectOrientation(bodySensor, worldSensor)
-        simROS.publish(orientationPub,{x=o[1],y=o[2],z=o[3]})
+        simROS.publish(orientationPub,{x=o[1],y=o[2],z=o[3]
         --simROS.publish(visuPub, {t=data, xp=p[1], yp=p[2], zp=p[3], xo=o[1], yo=o[2], zo=o[3]})
         --local mytable = {data,p[1],p[2],p[3],o[1],o[2],o[3]}
         mytable = {}

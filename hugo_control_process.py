@@ -161,7 +161,7 @@ def joint_control(m2s, s2m):
             # if args.render_train:
             #     env.render()
             state.squeeze()
-            print(state)
+            # print(state)
             action = agent.calc_action(state, ou_noise)
 
             s2m.put(action)
@@ -255,13 +255,13 @@ def joint_control(m2s, s2m):
             # is greater than the specified reward threshold
             # TODO: Option if no reward threshold is given
             if np.mean(mean_test_rewards[-3:]) >= reward_threshold:
-                agent.save_checkpoint(timestep, memory)
+                # agent.save_checkpoint(timestep, memory)
                 time_last_checkpoint = time.time()
-                logger.info('Saved model at {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
+                # logger.info('Saved model at {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
 
         epoch += 1
 
-    agent.save_checkpoint(timestep, memory)
+    # agent.save_checkpoint(timestep, memory)
     logger.info('Saved model at endtime {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
     logger.info('Stopping training at {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
     
@@ -499,7 +499,7 @@ if __name__ == '__main__':
 
     #Ctrl-C handling
     def sigint_handler(*args):
-        print("\nexiting!!!")
+        print("\n exiting!!!")
         stop_publisher.publish(z)
         p1.kill()
         p2.kill()
@@ -565,13 +565,13 @@ if __name__ == '__main__':
 
     def simState_cb(msg):
         global sim_state
-        print("Simulation state: ",msg)
+        # print("Simulation state: ",msg)
         sim_state = msg
         return
     
 
-    def reward_function(state):
-        return 1
+    def reward_function(actual_pos):
+        return actual_pos[0] * 10
     
 
     def is_it_done(state):
@@ -579,7 +579,7 @@ if __name__ == '__main__':
     
     def if_fallen_restart(pos):
         global sim_state
-        if pos[2] < 0.15:
+        if pos[2] < 0.22:
             stop_publisher.publish(Bool(True))
             # time.sleep(0.5)
             while sim_state == 1:
@@ -587,9 +587,9 @@ if __name__ == '__main__':
                 # print("waiting for restart")
             # print("restarted!!!")
             sync_publisher.publish(Bool(True))
-            time.sleep(0.1)
+            time.sleep(2)
             start_publisher.publish(Bool(True))  #start simulation
-            time.sleep(0.1)
+            time.sleep(2)
             step_publisher.publish(Bool(True)) #trigger next step
     
 
@@ -643,42 +643,16 @@ if __name__ == '__main__':
         # mapped_action = list(map(map_to_discrete_range, action[0].tolist()))
 
         mapped_action = action[0].tolist()
-        mapped_action = [x / 30.0 for x in mapped_action]
+        mapped_action = [x / 0.1 for x in mapped_action]
 
-
+        action_packet = Float32MultiArray()
+        action_packet.data = mapped_action
     
-
-        joint_publisher1.publish(mapped_action[0])
-        joint_publisher2.publish(mapped_action[1])
-        joint_publisher3.publish(mapped_action[2])
-        joint_publisher4.publish(mapped_action[3])
-        joint_publisher5.publish(mapped_action[4])
-        joint_publisher6.publish(mapped_action[5])
-        joint_publisher7.publish(mapped_action[6])
-        joint_publisher8.publish(mapped_action[7])
-        joint_publisher9.publish(mapped_action[8])
-        joint_publisher10.publish(mapped_action[9])
-        joint_publisher11.publish(mapped_action[10])
-        joint_publisher12.publish(mapped_action[11])
-        joint_publisher13.publish(mapped_action[12])
-        joint_publisher14.publish(mapped_action[13])
-        joint_publisher15.publish(mapped_action[14])
-        joint_publisher16.publish(mapped_action[15])
-        joint_publisher17.publish(mapped_action[16])
-        joint_publisher18.publish(mapped_action[17])
-        joint_publisher19.publish(mapped_action[18])
-        joint_publisher20.publish(mapped_action[19])
-        joint_publisher21.publish(mapped_action[20])
-        joint_publisher22.publish(mapped_action[21])
-        joint_publisher23.publish(mapped_action[22])
-        joint_publisher24.publish(mapped_action[23])
-        joint_publisher25.publish(mapped_action[24])
-        joint_publisher26.publish(mapped_action[25])
-
+        joint_publisher0.publish(action_packet)
 
         step_publisher.publish(z)
 
-        time.sleep(1)
+        # time.sleep(1)
         
         return
     
@@ -731,33 +705,8 @@ if __name__ == '__main__':
     rospy.Subscriber('/robOrientation', Point32, orientation_cb, queue_size = q_size)
     rospy.Subscriber("/simulationState", Int32, simState_cb)
 
+    joint_publisher0 = rospy.Publisher('/action', Float32MultiArray, queue_size=q_size)
 
-    joint_publisher1 = rospy.Publisher('/head_x_joint', Float32, queue_size=q_size)
-    joint_publisher2 = rospy.Publisher('/head_y_joint', Float32, queue_size=q_size)
-    joint_publisher3 = rospy.Publisher('/head_z_joint', Float32, queue_size=q_size)
-    joint_publisher4 = rospy.Publisher('/right_shoulder_rotate_joint', Float32, queue_size=q_size)
-    joint_publisher5 = rospy.Publisher('/right_shoulder_sideways_joint', Float32, queue_size=q_size)
-    joint_publisher6 = rospy.Publisher('/right_elbow_joint', Float32, queue_size=q_size)
-    joint_publisher7 = rospy.Publisher('/right_wrist_joint', Float32, queue_size=q_size)
-    joint_publisher8 = rospy.Publisher('/left_shoulder_rotate_joint', Float32, queue_size=q_size)
-    joint_publisher9 = rospy.Publisher('/left_shoulder_sideways_joint', Float32, queue_size=q_size)
-    joint_publisher10 = rospy.Publisher('/left_elbow_joint', Float32, queue_size=q_size)
-    joint_publisher11 = rospy.Publisher('/left_wrist_joint', Float32, queue_size=q_size)
-    joint_publisher12 = rospy.Publisher('/waist_x_joint', Float32, queue_size=q_size)
-    joint_publisher13 = rospy.Publisher('/waist_y_joint', Float32, queue_size=q_size)
-    joint_publisher14 = rospy.Publisher('/waist_z_joint', Float32, queue_size=q_size)
-    joint_publisher15 = rospy.Publisher('/right_hip_sideways_joint', Float32, queue_size=q_size)
-    joint_publisher16 = rospy.Publisher('/right_hip_forward_joint', Float32, queue_size=q_size)
-    joint_publisher17 = rospy.Publisher('/right_thight_joint', Float32, queue_size=q_size)
-    joint_publisher18 = rospy.Publisher('/right_knee_joint', Float32, queue_size=q_size)
-    joint_publisher19 = rospy.Publisher('/right_upper_ankle_joint', Float32, queue_size=q_size)
-    joint_publisher20 = rospy.Publisher('/right_lower_ankle_joint', Float32, queue_size=q_size)
-    joint_publisher21 = rospy.Publisher('/left_hip_sideways_joint', Float32, queue_size=q_size)
-    joint_publisher22 = rospy.Publisher('/left_hip_forward_joint', Float32, queue_size=q_size)
-    joint_publisher23 = rospy.Publisher('/left_thight_joint', Float32, queue_size=q_size)
-    joint_publisher24 = rospy.Publisher('/left_knee_joint', Float32, queue_size=q_size)
-    joint_publisher25 = rospy.Publisher('/left_upper_ankle_joint', Float32, queue_size=q_size)
-    joint_publisher26 = rospy.Publisher('/left_lower_ankle_joint', Float32, queue_size=q_size)
     rate = rospy.Rate(10)
 
 
@@ -787,9 +736,31 @@ if __name__ == '__main__':
 
     print("main thread")
 
+    prev_state = 0
+    counter = 0
+
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
         # print("main thread main thread main thread main thread")
+        print("counter = ", counter)
+        if sim_state == 0 and prev_state == 0: #ha nem futott es nem is fut
+            counter += 1
+        elif sim_state == 1 and prev_state == 0: #ha nem futott de most fut
+            counter = 0
+
+        if counter == 30: #ha leallt
+            print("main restarts simulation!!!!!!")
+            sync_publisher.publish(Bool(True))
+            time.sleep(2)
+            start_publisher.publish(Bool(True))  #start simulation
+            time.sleep(2)
+            step_publisher.publish(Bool(True)) #trigger next step
+            counter = 0
+
+        prev_state = sim_state
+
+
         rate.sleep()
+
 
     stop_publisher.publish(z)
