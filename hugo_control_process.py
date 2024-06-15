@@ -30,6 +30,11 @@ import torch.multiprocessing as mp
 # import torch.multiprocessing.queue as queue
 # from multiprocessing import Manager
 
+
+counter = 0
+prev_state = 0
+
+
 logger = logging.getLogger('train')
 logger.setLevel(logging.DEBUG)
 
@@ -567,6 +572,10 @@ if __name__ == '__main__':
         global sim_state
         # print("Simulation state: ",msg)
         sim_state = msg
+
+
+
+
         return
     
 
@@ -579,7 +588,7 @@ if __name__ == '__main__':
     
     def if_fallen_restart(pos):
         global sim_state
-        if pos[2] < 0.22:
+        if pos[2] < 0.3:
             stop_publisher.publish(Bool(True))
             # time.sleep(0.5)
             while sim_state == 1:
@@ -587,10 +596,11 @@ if __name__ == '__main__':
                 # print("waiting for restart")
             # print("restarted!!!")
             sync_publisher.publish(Bool(True))
-            time.sleep(2)
+            time.sleep(1)
             start_publisher.publish(Bool(True))  #start simulation
-            time.sleep(2)
+            time.sleep(1)
             step_publisher.publish(Bool(True)) #trigger next step
+            time.sleep(1)
     
 
     def step_cb(msg):
@@ -741,23 +751,35 @@ if __name__ == '__main__':
 
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
+        # print("main running")
+        current_state = sim_state.data
         # print("main thread main thread main thread main thread")
-        print("counter = ", counter)
-        if sim_state == 0 and prev_state == 0: #ha nem futott es nem is fut
-            counter += 1
-        elif sim_state == 1 and prev_state == 0: #ha nem futott de most fut
-            counter = 0
 
-        if counter == 30: #ha leallt
+        # print("\ncounter = ", counter)
+        # print("current state", current_state)
+        # print("prev state", prev_state)
+
+        if (current_state == 0) and (prev_state == 0): #ha nem futott es nem is fut
+            # print("first")
+            counter += 1
+            # print("counter in first = ", counter)
+        elif (current_state == 1) and (prev_state == 0): #ha nem futott de most fut
+            # print("second")
+            counter = 0
+            # print("counter in second = ", counter)
+
+        if counter >= 40: #ha leallt
             print("main restarts simulation!!!!!!")
             sync_publisher.publish(Bool(True))
-            time.sleep(2)
+            time.sleep(3)
             start_publisher.publish(Bool(True))  #start simulation
-            time.sleep(2)
+            time.sleep(3)
             step_publisher.publish(Bool(True)) #trigger next step
+            time.sleep(3)
             counter = 0
 
-        prev_state = sim_state
+        prev_state = current_state
+
 
 
         rate.sleep()
