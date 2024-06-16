@@ -34,6 +34,9 @@ import torch.multiprocessing as mp
 counter = 0
 prev_state = 0
 
+original_pos = []
+original_ori = []
+
 
 logger = logging.getLogger('train')
 logger.setLevel(logging.DEBUG)
@@ -312,10 +315,10 @@ def process_image(q):
 #------------------------------------------------------------------------------------------------------------
 
 
-def graph_values():
+def graph_state():
 
 
-    rospy.init_node('graph_values')
+    rospy.init_node('graph_state')
     q_size = 10
 
 
@@ -437,7 +440,6 @@ def graph_values():
         ax6.set_xlim(-0.1, time_list[-1])
 
         lines[0].set_ydata(pos_x_list)
-        lines[0].set_xdata(time_list)
         lines[1].set_ydata(pos_y_list)
         lines[2].set_ydata(pos_z_list)
         lines[3].set_ydata(ori_x_list)
@@ -451,6 +453,145 @@ def graph_values():
         fig.canvas.draw() 
         fig.canvas.flush_events() 
         rate.sleep()
+
+    
+
+#------------------------------------------------------------------------------------------------------------
+
+
+
+
+def graph_reward(q):
+
+    step_counter = 0
+
+    #interactive mode on
+    plt.ion() 
+    plt.tight_layout(pad = 5) #TODO
+
+    # Create figure
+    fig = plt.figure(figsize=(12, 12))
+
+    # Define grid spec
+    gs = fig.add_gridspec(3, 3)
+
+    # Create subplots
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax3 = fig.add_subplot(gs[0, 2])
+    ax4 = fig.add_subplot(gs[1, 0])
+    ax5 = fig.add_subplot(gs[1, 1])
+    ax6 = fig.add_subplot(gs[1, 2])
+    ax7 = fig.add_subplot(gs[2, :])
+
+    reward_values = q.get()
+
+    crw = reward_values #copy of reward_values
+
+    mykeys = list(reward_values.keys())
+
+    # Initialize data
+    x = [step_counter]
+    y1 = crw[mykeys[0]]
+    y2 = crw[mykeys[1]]
+    y3 = crw[mykeys[2]]
+    y4 = crw[mykeys[3]]
+    y5 = crw[mykeys[4]]
+    y6 = crw[mykeys[5]]
+    y7 = crw[mykeys[6]]
+
+    # Create initial plots
+    lines = []
+    lines.append(ax1.plot(x, y1, color='b')[0])
+    lines.append(ax2.plot(x, y2, color='r')[0])
+    lines.append(ax3.plot(x, y3, color='g')[0])
+    lines.append(ax4.plot(x, y4, color='m')[0])
+    lines.append(ax5.plot(x, y5, color='c')[0])
+    lines.append(ax6.plot(x, y6, color='y')[0])
+    lines.append(ax7.plot(x, y7, color='k')[0])
+
+    
+
+    # Set titles for subplots
+    ax1.set_title(mykeys[0])
+    ax2.set_title(mykeys[1])
+    ax3.set_title(mykeys[2])
+    ax4.set_title(mykeys[3])
+    ax5.set_title(mykeys[4])
+    ax6.set_title(mykeys[5])
+    ax7.set_title(mykeys[6])
+
+    # Set labels for subplots
+    for ax in [ax1, ax2, ax3, ax4, ax5, ax6, ax7]:
+        ax.set_xlabel('x')
+        ax.set_ylabel('time')
+
+    graph_padding = 0.1
+
+    counter = 0
+
+    step_list = []
+
+    step_list.append(counter)
+
+    while True:
+        counter += 1
+        step_list.append(counter)
+
+        reward_values = q.get()
+
+        for key in list(reward_values.keys()):
+            crw[key].append(reward_values[key][0])
+
+        first_min = min([min(crw[mykeys[0]]), min(crw[mykeys[1]]), min(crw[mykeys[2]])])
+        first_max = max([max(crw[mykeys[0]]), max(crw[mykeys[1]]), max(crw[mykeys[2]])])
+
+        padded_first_min = first_min - graph_padding
+        padded_first_max = first_max + graph_padding
+
+        second_min = min([min(crw[mykeys[3]]), min(crw[mykeys[4]]), min(crw[mykeys[5]])])
+        second_max = max([max(crw[mykeys[3]]), max(crw[mykeys[4]]), max(crw[mykeys[5]])])
+
+        padded_second_min = second_min - graph_padding
+        padded_second_max = second_max + graph_padding
+
+        ax1.set_ylim(padded_first_min, padded_first_max)
+        ax1.set_xlim(-0.1, step_list[-1])
+
+        ax2.set_ylim(padded_first_min, padded_first_max)
+        ax2.set_xlim(-0.1, step_list[-1])
+
+        ax3.set_ylim(padded_first_min, padded_first_max)
+        ax3.set_xlim(-0.1, step_list[-1])
+
+        ax4.set_ylim(padded_second_min, padded_second_max)
+        ax4.set_xlim(-0.1, step_list[-1])
+
+        ax5.set_ylim(padded_second_min, padded_second_max)
+        ax5.set_xlim(-0.1, step_list[-1])
+
+        ax6.set_ylim(padded_second_min, padded_second_max)
+        ax6.set_xlim(-0.1, step_list[-1])
+
+        ax7.set_ylim(min(crw[mykeys[6]]), max(crw[mykeys[6]]))
+        ax7.set_xlim(-0.1, step_list[-1])
+
+
+        lines[0].set_ydata(crw[mykeys[0]])
+        lines[1].set_ydata(crw[mykeys[1]])
+        lines[2].set_ydata(crw[mykeys[2]])
+        lines[3].set_ydata(crw[mykeys[3]])
+        lines[4].set_ydata(crw[mykeys[4]])
+        lines[5].set_ydata(crw[mykeys[5]])
+        lines[6].set_ydata(crw[mykeys[6]])
+
+        for line in lines:
+            line.set_xdata(step_list)
+
+        fig.canvas.draw() 
+        fig.canvas.flush_events() 
+
+
 
     
 
@@ -510,6 +651,10 @@ if __name__ == '__main__':
         p2.kill()
         p1.join()
         p2.join()
+        p3.kill()
+        p3.join()
+        p4.kill()
+        p4.join()
         print("Processes should be joined by now")
         exit(0)
 
@@ -572,23 +717,16 @@ if __name__ == '__main__':
         global sim_state
         # print("Simulation state: ",msg)
         sim_state = msg
-
-
-
-
         return
     
-
-    def reward_function(actual_pos):
-        return actual_pos[0] * 10
     
-
     def is_it_done(state):
         return 0
     
+
     def if_fallen_restart(pos):
         global sim_state
-        if pos[2] < 0.3:
+        if pos[2] < 0.4:
             stop_publisher.publish(Bool(True))
             # time.sleep(0.5)
             while sim_state == 1:
@@ -602,6 +740,87 @@ if __name__ == '__main__':
             step_publisher.publish(Bool(True)) #trigger next step
             time.sleep(1)
     
+
+    def reward_function(actual_pos, actual_ori):
+        global original_pos
+        global original_ori
+
+        oxp = original_pos[0]
+        oyp = original_pos[1]
+        ozp = original_pos[2]
+
+        oxo = original_ori[0]
+        oyo = original_ori[1]
+        ozo = original_ori[2]
+
+        axp = actual_pos[0]
+        ayp = actual_pos[1]
+        azp = actual_pos[2]
+
+        axo = actual_ori[0]
+        ayo = actual_ori[1]
+        azo = actual_ori[2]
+
+
+        forward_weight = 30
+        lateral_weigth = 3
+        vertical_weigth = 2
+        x_rot_weight = 1.5
+        y_rot_weight = 7
+        z_rot_weight = 3
+        
+
+        #megtett tav
+        forward_reward = abs(oxp) + axp
+        print("forward_reward: ", forward_reward)
+        print("oxp: ", oxp)
+        print("axp: ", axp)
+        lateral_reward = abs(abs(oyp)-abs(ayp))
+        vertical_reward = abs(abs(ozp)-abs(azp))
+
+        x_rot_reward = abs(abs(oxo) - abs(axo))
+        y_rot_reward = abs(abs(oyo) - abs(ayo))
+        z_rot_reward = abs(abs(ozo) - abs(azo))
+    
+
+        # reward = \
+        #     forward_weight      * forward_reward \
+        # -   lateral_weigth      * lateral_reward \
+        # -   vertical_weigth     * vertical_reward \
+        # -   x_rot_weight        * x_rot_reward \
+        # -   y_rot_weight        * y_rot_reward \
+        # -   z_rot_weight        * z_rot_reward
+
+        forward = forward_weight    * forward_reward    
+        lateral = lateral_weigth    * lateral_reward    * -1
+        vertical = vertical_weigth  * vertical_reward   * -1
+        x_rot = x_rot_weight        * x_rot_reward      * -1
+        y_rot = y_rot_weight        * y_rot_reward      * -1
+        z_rot = z_rot_weight        * z_rot_reward      * -1
+
+        
+        reward = 0 \
+        + forward \
+        + lateral \
+        + vertical \
+        + x_rot \
+        + y_rot \
+        + z_rot 
+
+        reward_values = \
+        {
+            'forward'   : [forward],
+            'lateral'   : [lateral],
+            'vertical'  : [vertical],
+            'x_rot'     : [x_rot],
+            'y_rot'     : [y_rot],
+            'z_rot'     : [z_rot],
+            'reward'    : [reward]
+        }
+
+
+        return reward, reward_values
+
 
     def step_cb(msg):
         global first
@@ -617,11 +836,14 @@ if __name__ == '__main__':
         global pos_z
         global pos_shift_reg
         global ori_shift_reg
-
+        global original_pos
+        global original_ori
 
         while not got_position and not got_orientiation:
             time.sleep(0.001)
+        
 
+        print(got_position, got_orientiation)
 
         #setting default values for next cycle
         got_position = False
@@ -639,12 +861,29 @@ if __name__ == '__main__':
 
 
         if first:
-            m2s.put(state)
-            first = 0
+            if (actual_pos != [0,0,0]) and (actual_ori != [0,0,0]):
+                m2s.put(state)
+                first = 0
+                original_pos = actual_pos
+                original_ori = actual_ori
+                
+                print("\n")
+                print("ap = ", actual_pos)
+                print("ap = ", actual_pos)
+                print("ao = ", actual_ori)
+                print("ao = ", actual_ori)
+                print("op = ", original_pos)
+                print("op = ", original_pos)
+                print("oo = ", original_ori)
+                print("oo = ", original_ori)
+            else:
+                print("Bad position and orientation initialization avoided!")
+                return
         else:
             m2s.put(state)
-            reward = reward_function(state)
+            reward, reward_values = reward_function(actual_pos, actual_ori)
             m2s.put(reward)
+            q4.put(reward_values)
             done = is_it_done(actual_pos)
             m2s.put(done)
 
@@ -653,7 +892,7 @@ if __name__ == '__main__':
         # mapped_action = list(map(map_to_discrete_range, action[0].tolist()))
 
         mapped_action = action[0].tolist()
-        mapped_action = [x / 0.1 for x in mapped_action]
+        mapped_action = [x / 0.05 for x in mapped_action]
 
         action_packet = Float32MultiArray()
         action_packet.data = mapped_action
@@ -677,6 +916,8 @@ if __name__ == '__main__':
     pause_flag = True
     sim_state = 0
 
+  
+
 
     # dummy_joint_control("something")
 
@@ -697,8 +938,12 @@ if __name__ == '__main__':
     # p2.start()
 
     q3 = Queue()
-    p3 = Process(target=graph_values, args=[])
+    p3 = Process(target=graph_state, args=[])
     p3.start()
+
+    q4 = Queue()
+    p4 = Process(target=graph_reward, args=[q4,])
+    p4.start()
     
     rospy.init_node('hugo_main')
     q_size = 10

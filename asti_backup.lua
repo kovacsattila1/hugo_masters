@@ -1,382 +1,153 @@
-function sysCall_init()
-    robotHandle=sim.getObjectHandle(sim.handle_self)
-    --head joints
-    head_x=sim.getObjectHandle("head_x_joint") -- Handle of the right motor
-    head_y=sim.getObjectHandle("head_y_joint")
-    head_z=sim.getObjectHandle("head_z_joint") 
-    
-    --right_arm_joints
-    right_shoulder_rotate=sim.getObjectHandle("right_shoulder_rotate_joint") 
-    right_shoulder_sideways=sim.getObjectHandle("right_shoulder_sideways_joint") 
-    right_elbow=sim.getObjectHandle("right_elbow_joint") 
-    right_wrist=sim.getObjectHandle("right_wrist_joint") 
-    
-    --left_arm_joints
-    left_shoulder_rotate=sim.getObjectHandle("left_shoulder_rotate_joint") 
-    left_shoulder_sideways=sim.getObjectHandle("left_shoulder_sideways_joint") 
-    left_elbow=sim.getObjectHandle("left_elbow_joint") 
-    left_wrist=sim.getObjectHandle("left_wrist_joint") 
-    
-    --upper_body_joints
-    waist_x=sim.getObjectHandle("waist_x_joint") 
-    waist_y=sim.getObjectHandle("waist_y_joint") 
-    waist_z=sim.getObjectHandle("waist_z_joint") 
-    
-    --right_leg_joints
-    right_hip_sideways=sim.getObjectHandle("right_hip_sideways_joint") 
-    right_hip_forward=sim.getObjectHandle("right_hip_forward_joint") 
-    right_thight=sim.getObjectHandle("right_thight_joint") 
-    right_knee=sim.getObjectHandle("right_knee_joint") 
-    right_upper_ankle=sim.getObjectHandle("right_upper_ankle_joint") 
-    right_lower_ankle=sim.getObjectHandle("right_lower_ankle_joint") 
-    
-    --left_leg_joints
-    left_hip_sideways=sim.getObjectHandle("left_hip_sideways_joint") 
-    left_hip_forward=sim.getObjectHandle("left_hip_forward_joint") 
-    left_thight=sim.getObjectHandle("left_thight_joint") 
-    left_knee=sim.getObjectHandle("left_knee_joint") 
-    left_upper_ankle=sim.getObjectHandle("left_upper_ankle_joint") 
-    left_lower_ankle=sim.getObjectHandle("left_lower_ankle_joint") 
-    
-    
-    sim.setJointTargetForce(head_x,0.0, true);
-    sim.setJointTargetForce(head_y,0.0, true);
-    sim.setJointTargetForce(head_z,0.0, true);
-    sim.setJointTargetForce(right_shoulder_rotate,0.0, true);
-    sim.setJointTargetForce(right_shoulder_sideways,0.0, true);
-    sim.setJointTargetForce(right_elbow,0.0, true);
-    sim.setJointTargetForce(right_wrist,0.0, true);
-    sim.setJointTargetForce(left_shoulder_rotate,0.0, true);
-    sim.setJointTargetForce(left_shoulder_sideways,0.0, true);
-    sim.setJointTargetForce(left_elbow,0.0, true);
-    sim.setJointTargetForce(left_wrist,0.0, true);
-    sim.setJointTargetForce(waist_x,0.0, true);
-    sim.setJointTargetForce(waist_y,0.0, true);
-    sim.setJointTargetForce(waist_z,0.0, true);
-    sim.setJointTargetForce(right_hip_sideways,0.0, true);
-    sim.setJointTargetForce(right_hip_forward,0.0, true);
-    sim.setJointTargetForce(right_thight,0.0, true);
-    sim.setJointTargetForce(right_knee,0.0, true);
-    sim.setJointTargetForce(right_upper_ankle,0.0, true);
-    sim.setJointTargetForce(right_lower_ankle,0.0, true);
-    sim.setJointTargetForce(left_hip_sideways,0.0, true);
-    sim.setJointTargetForce(left_hip_forward,0.0, true);
-    sim.setJointTargetForce(left_thight,0.0, true);
-    sim.setJointTargetForce(left_knee,0.0, true);
-    sim.setJointTargetForce(left_upper_ankle,0.0, true);
-    sim.setJointTargetForce(left_lower_ankle,0.0, true);
+--lua
 
+sim=require'sim'
+simROS = require'simROS'
+
+function sysCall_init() 
+    --robotHandle=sim.getObjectHandle(sim.handle_self)
+    --asti=sim.getObject(".")
+
+    --get object handles
+    rightLegJoint1 = sim.getObjectHandle("./rightLegJoint1")
+    rightLegJoint2 = sim.getObjectHandle("./rightLegJoint2")
+    rightLegJoint3 = sim.getObjectHandle("./rightLegJoint3")
+    rightLegJoint4 = sim.getObjectHandle("./rightLegJoint4")
+    rightLegJoint5 = sim.getObjectHandle("./rightLegJoint5")
+    rightLegJoint6 = sim.getObjectHandle("./rightLegJoint6")
+    
+    leftLegJoint1 = sim.getObjectHandle("./leftLegJoint1")
+    leftLegJoint2 = sim.getObjectHandle("./leftLegJoint2")
+    leftLegJoint3 = sim.getObjectHandle("./leftLegJoint3")
+    leftLegJoint4 = sim.getObjectHandle("./leftLegJoint4")
+    leftLegJoint5 = sim.getObjectHandle("./leftLegJoint5")
+    leftLegJoint6 = sim.getObjectHandle("./leftLegJoint6")
+    
+    neckJoint1 = sim.getObjectHandle("./neckJoint1")
+    neckJoint2 = sim.getObjectHandle("./neckJoint2")
+    
+    leftArmJoint1 = sim.getObjectHandle("./leftArmJoint1")
+    leftArmJoint2 = sim.getObjectHandle("./leftArmJoint2")
+    leftArmJoint3 = sim.getObjectHandle("./leftArmJoint3")
+    
+    rightArmJoint1 = sim.getObjectHandle("./rightArmJoint1")
+    rightArmJoint2 = sim.getObjectHandle("./rightArmJoint2")
+    rightArmJoint3 = sim.getObjectHandle("./rightArmJoint3")
+  
     
     
-    --noseSensor=sim.getObjectHandle("rosInterfaceControlledBubbleRobSensingNose") -- Handle of the proximity sensor
-    --drawingCont=sim.addDrawingObject(sim.drawing_linestrip+sim.drawing_cyclic,2,0,-1,200,{1,1,0},nil,nil,{1,1,0})
-    -- Launch the ROS client application:
     if simROS then
         sim.addLog(sim.verbosity_scriptinfos,"ROS interface was found.")
         local sysTime=sim.getSystemTimeInMs(-1) 
         local positionTopicName='robPosition'
         local orientationTopicName='robOrientation'
         local visuDataTopicName = 'visu'
-        --local leftMotorTopicName='leftMotorSpeed'..sysTime -- we add a random component so that we can have several instances of this robot running
-        --local rightMotorTopicName='rightMotorSpeed'..sysTime -- we add a random component so that we can have several instances of this robot running
-        --local sensorTopicName='sensorTrigger'..sysTime -- we add a random component so that we can have several instances of this robot running
         local simulationTimeTopicName='simTime'..sysTime -- we add a random component so that we can have several instances of this robot running
-        -- Prepare the sensor publisher and the motor speed subscribers:
-        --sensorPub=simROS.advertise('/'..sensorTopicName,'std_msgs/Bool')
+        local stateTopicName = 'state'
+
+        positionPub = simROS.advertise('/'..positionTopicName,'geometry_msgs/Point32')
+        orientationPub = simROS.advertise('/'..orientationTopicName,'geometry_msgs/Point32')
+        visuPub = simROS.advertise('/'..visuDataTopicName,'std_msgs/Float32MultiArray')
+        simTimePub =simROS.advertise('/'..simulationTimeTopicName,'std_msgs/Float32')
+        simTimePub =simROS.advertise('/'..simulationTimeTopicName,'std_msgs/Float32')
+        statePub =simROS.advertise('/'..stateTopicName,'std_msgs/Float32MultiArray')
         
-        --simTimePub=simROS.advertise('/'..simulationTimeTopicName,'std_msgs/Float32')
-        --leftMotorSub=simROS.subscribe('/'..leftMotorTopicName,'std_msgs/Float32','setLeftMotorVelocity_cb')
-        --rightMotorSub=simROS.subscribe('/'..rightMotorTopicName,'std_msgs/Float32','setRightMotorVelocity_cb')
-        
-        positionPub=simROS.advertise('/'..positionTopicName,'geometry_msgs/Point32')
-        orientationPub=simROS.advertise('/'..orientationTopicName,'geometry_msgs/Point32')
-        visuPub=simROS.advertise('/'..visuDataTopicName,'std_msgs/Float32MultiArray')
-        
-        
-        simTimePub=simROS.advertise('/'..simulationTimeTopicName,'std_msgs/Float32')
-        
-        head_x_joint_sub=simROS.subscribe('/head_x_joint','std_msgs/Float32','head_x_joint_cb')
-        head_y_joint_sub=simROS.subscribe('/head_y_joint','std_msgs/Float32','head_y_joint_cb')
-        head_z_joint_sub=simROS.subscribe('/head_z_joint','std_msgs/Float32','head_z_joint_cb')
-        
-        right_shoulder_rotate_joint_sub=simROS.subscribe('/right_shoulder_rotate_joint','std_msgs/Float32','right_shoulder_rotate_joint_cb')
-        right_shoulder_sideways_joint_sub=simROS.subscribe('/right_shoulder_sideways_joint','std_msgs/Float32','right_shoulder_sideways_joint_cb')
-        right_elbow_joint_sub=simROS.subscribe('/right_elbow_joint','std_msgs/Float32','right_elbow_joint_cb')
-        right_wrist_joint_sub=simROS.subscribe('/right_wrist_joint','std_msgs/Float32','right_wrist_joint_cb')
-        
-        left_shoulder_rotate_joint_sub=simROS.subscribe('/left_shoulder_rotate_joint','std_msgs/Float32','left_shoulder_rotate_joint_cb')
-        left_shoulder_sideways_joint_sub=simROS.subscribe('/left_shoulder_sideways_joint','std_msgs/Float32','left_shoulder_sideways_joint_cb')
-        left_elbow_joint_sub=simROS.subscribe('/left_elbow_joint','std_msgs/Float32','left_elbow_joint_cb')
-        left_wrist_joint_sub=simROS.subscribe('/left_wrist_joint','std_msgs/Float32','left_wrist_joint_cb')
-        
-        waist_x_joint_sub=simROS.subscribe('/waist_x_joint','std_msgs/Float32','waist_x_joint_cb')
-        waist_y_joint_sub=simROS.subscribe('/waist_y_joint','std_msgs/Float32','waist_y_joint_cb')
-        waist_z_joint_sub=simROS.subscribe('/waist_z_joint','std_msgs/Float32','waist_z_joint_cb')
-        
-        right_hip_sideways_joint_sub=simROS.subscribe('/right_hip_sideways_joint','std_msgs/Float32','right_hip_sideways_joint_cb')
-        right_hip_forward_joint_sub=simROS.subscribe('/right_hip_forward_joint','std_msgs/Float32','right_hip_forward_joint_cb')
-        right_thight_joint_sub=simROS.subscribe('/right_thight_joint','std_msgs/Float32','right_thight_joint_cb')
-        right_knee_joint_sub=simROS.subscribe('/right_knee_joint','std_msgs/Float32','right_knee_joint_cb')
-        right_upper_ankle_joint_sub=simROS.subscribe('/right_upper_ankle_joint','std_msgs/Float32','right_upper_ankle_joint_cb')
-        right_lower_ankle_joint_sub=simROS.subscribe('/right_lower_ankle_joint','std_msgs/Float32','right_lower_ankle_joint_cb')
-        
-        left_hip_sideways_joint_sub=simROS.subscribe('/left_hip_sideways_joint','std_msgs/Float32','left_hip_sideways_joint_cb')
-        left_hip_forward_joint_sub=simROS.subscribe('/left_hip_forward_joint','std_msgs/Float32','left_hip_forward_joint_cb')
-        left_thight_joint_sub=simROS.subscribe('/left_thight_joint','std_msgs/Float32','left_thight_joint_cb')
-        left_knee_joint_sub=simROS.subscribe('/left_knee_joint','std_msgs/Float32','left_knee_joint_cb')
-        left_upper_ankle_joint_sub=simROS.subscribe('/left_upper_ankle_joint','std_msgs/Float32','left_upper_ankle_joint_cb')
-        left_lower_ankle_joint_sub=simROS.subscribe('/left_lower_ankle_joint','std_msgs/Float32','left_lower_ankle_joint_cb')
-        
+        --subscribe to action topic
+        action_sub=simROS.subscribe('/action','std_msgs/Float32MultiArray','action_cb')
         
         
         
         -- Now we start the client application:
-        result=sim.launchExecutable('ros_hugo',simulationTimeTopicName,0)
+        result=sim.launchExecutable('ros_asti',simulationTimeTopicName,0)
     else
         sim.addLog(sim.verbosity_scripterrors,"ROS interface was not found. Cannot run.")
     end
     
+    
+
+
+end
+
+function action_cb(msg)
+    sim.setJointTargetForce(rightLegJoint1,msg.data[1], true)
+    sim.setJointTargetForce(rightLegJoint2,msg.data[2], true)
+    sim.setJointTargetForce(rightLegJoint3,msg.data[3], true)
+    sim.setJointTargetForce(rightLegJoint4,msg.data[4], true)
+    sim.setJointTargetForce(rightLegJoint5,msg.data[5], true)
+    sim.setJointTargetForce(rightLegJoint6,msg.data[6], true)
+    sim.setJointTargetForce(leftLegJoint1,msg.data[7], true)
+    sim.setJointTargetForce(leftLegJoint2,msg.data[8], true)
+    sim.setJointTargetForce(leftLegJoint3,msg.data[9], true)
+    sim.setJointTargetForce(leftLegJoint4,msg.data[10], true)
+    sim.setJointTargetForce(leftLegJoint5,msg.data[11], true)
+    sim.setJointTargetForce(leftLegJoint6,msg.data[12], true)
+    sim.setJointTargetForce(neckJoint1,msg.data[13], true)
+    sim.setJointTargetForce(neckJoint2,msg.data[14], true)
+    sim.setJointTargetForce(leftArmJoint1,msg.data[15], true)
+    sim.setJointTargetForce(leftArmJoint2,msg.data[16], true)
+    sim.setJointTargetForce(leftArmJoint3,msg.data[17], true)
+    sim.setJointTargetForce(rightArmJoint1,msg.data[18], true)
+    sim.setJointTargetForce(rightArmJoint2,msg.data[19], true)
+    sim.setJointTargetForce(rightArmJoint3,msg.data[20], true)
+
 end
 
 
-function sysCall_sensing() 
-    --local p=sim.getObjectPosition(robotHandle,-1)
-    --sim.addDrawingObjectItem(drawingCont,p)
+function sysCall_cleanup()
+    --rsimIK.eraseEnvironment(ikEnv)
 end 
 
-
-function head_x_joint_cb(msg)
-    sim.setJointTargetForce(head_x,msg.data, true);
-end
-
-
-function head_y_joint_cb(msg)
-    sim.setJointTargetForce(head_y,msg.data, true);
-end
-
-
-function head_z_joint_cb(msg)
-    sim.setJointTargetForce(head_z,msg.data, true);
-end
-
-
-function right_shoulder_rotate_joint_cb(msg)
-    sim.setJointTargetForce(right_shoulder_rotate,msg.data, true);
-end
-
-
-function right_shoulder_sideways_joint_cb(msg)
-    sim.setJointTargetForce(right_shoulder_sideways,msg.data, true);
-end
-
-
-function right_elbow_joint_cb(msg)
-    sim.setJointTargetForce(right_elbow,msg.data, true);
-end
-
-
-function right_wrist_joint_cb(msg)
-    sim.setJointTargetForce(right_wrist,msg.data, true);
-end
-
-
-function left_shoulder_rotate_joint_cb(msg)
-    sim.setJointTargetForce(left_shoulder_rotate,msg.data, true);
-end
-
-
-function left_shoulder_sideways_joint_cb(msg)
-    sim.setJointTargetForce(left_shoulder_sideways,msg.data, true);
-end
-
-
-function left_elbow_joint_cb(msg)
-    sim.setJointTargetForce(left_elbow,msg.data, true);
-end
-
-
-function left_wrist_joint_cb(msg)
-    sim.setJointTargetForce(left_wrist,msg.data, true);
-end
-
-
-function waist_x_joint_cb(msg)
-    sim.setJointTargetForce(waist_x,msg.data, true);
-end
-
-
-function waist_y_joint_cb(msg)
-    sim.setJointTargetForce(waist_y,msg.data, true);
-end
-
-
-function waist_z_joint_cb(msg)
-    sim.setJointTargetForce(waist_z,msg.data, true);
-end
-
-
-function right_hip_sideways_joint_cb(msg)
-    sim.setJointTargetForce(right_hip_sideways,msg.data, true);
-end
-
-
-function right_hip_forward_joint_cb(msg)
-    sim.setJointTargetForce(right_hip_forward,msg.data, true);
-end
-
-
-function right_thight_joint_cb(msg)
-    sim.setJointTargetForce(right_thight,msg.data, true);
-end
-
-
-function right_knee_joint_cb(msg)
-    sim.setJointTargetForce(right_knee,msg.data, true);
-end
-
-
-function right_upper_ankle_joint_cb(msg)
-    sim.setJointTargetForce(right_upper_ankle,msg.data, true);
-end
-
-
-function right_lower_ankle_joint_cb(msg)
-    sim.setJointTargetForce(right_lower_ankle,msg.data, true);
-end
-
-
-function left_hip_sideways_joint_cb(msg)
-    sim.setJointTargetForce(left_hip_sideways,msg.data, true);
-end
-
-
-function left_hip_forward_joint_cb(msg)
-    sim.setJointTargetForce(left_hip_forward,msg.data, true);
-end
-
-
-function left_thight_joint_cb(msg)
-    sim.setJointTargetForce(left_thight,msg.data, true);
-end
-
-
-function left_knee_joint_cb(msg)
-    sim.setJointTargetForce(left_knee,msg.data, true);
-end
-
-
-function left_upper_ankle_joint_cb(msg)
-    sim.setJointTargetForce(left_upper_ankle,msg.data, true);
-end
-
-
-function left_lower_ankle_joint_cb(msg)
-    sim.setJointTargetForce(left_lower_ankle,msg.data, true);
-end
-
-
-
-
-function getTransformStamped(objHandle,name,relTo,relToName)
-    t=sim.getSystemTime()
-    p=sim.getObjectPosition(objHandle,relTo)
-    o=sim.getObjectQuaternion(objHandle,relTo)
-    return {
-        header={
-            stamp=t,
-            frame_id=relToName
-        },
-        child_frame_id=name,
-        transform={
-            translation={x=p[1],y=p[2],z=p[3]},
-            rotation={x=o[1],y=o[2],z=o[3],w=o[4]}
-        }
-    }
-end
-
-
-function sysCall_actuation()
-    -- Send an updated sensor and simulation time message, and send the transform of the robot:
+function sysCall_actuation() 
     if simROS then
-        --local result=sim.readProximitySensor(noseSensor)
-        --local detectionTrigger={}
-        --detectionTrigger['data']=result>0
-        --simROS.publish(sensorPub,detectionTrigger)
         data=sim.getSimulationTime()
         simROS.publish(simTimePub,{data=sim.getSimulationTime()})
+        
         -- Send the robot's transform:
-        simROS.sendTransform(getTransformStamped(robotHandle,'rosInterfaceControlledBubbleRob',-1,'world'))
+        --simROS.sendTransform(getTransformStamped(robotHandle,'rosInterfaceControlledBubbleRob',-1,'world'))
+        
         -- To send several transforms at once, use simROS.sendTransforms instead
-        bodySensor=sim.getObjectHandle("middle_respondable")
-        worldSensor=sim.getObjectHandle("ResizableFloor_5_25")
+
+        bodySensor = sim.getObjectHandle("/Asti/asti_body")
+        worldSensor = sim.getObjectHandle("/ResizableFloor_5_25")
+        
         p=sim.getObjectPosition(bodySensor, worldSensor)
         simROS.publish(positionPub,{x=p[1],y=p[2],z=p[3]})
         o=sim.getObjectOrientation(bodySensor, worldSensor)
         simROS.publish(orientationPub,{x=o[1],y=o[2],z=o[3]})
-        --simROS.publish(visuPub, {t=data, xp=p[1], yp=p[2], zp=p[3], xo=o[1], yo=o[2], zo=o[3]})
-        --local mytable = {data,p[1],p[2],p[3],o[1],o[2],o[3]}
+        
         mytable = {}
         mytable.data = {data,p[1],p[2],p[3],o[1],o[2],o[3]}
-        --mytable.t = data
-        --mytable.xp = p[1]
-        --mytable.yp = p[2]
-        --mytable.zp = p[3]
-        --mytable.xo = o[1]
-        --mytable.yo = o[2]
-        --mytable.zo = o[3]
-        
-        --mytable[1] = data
-        --mytable[2] = p[1]
-        --mytable[3] = p[2]
-        --mytable[4] = p[3]
-        --mytable[5] = o[1]
-        --mytable[6] = o[2]
-        --mytable[7] = o[3]
-        
+
         --sim.addLog(sim.verbosity_scriptinfos,type(mytable))
         simROS.publish(visuPub, mytable)
         
-    end
-end
-
-function sysCall_cleanup()
-    if simROS then
-        -- Following not really needed in a simulation script (i.e. automatically shut down at simulation end):
-        --simROS.shutdownPublisher(sensorPub)
-        simROS.shutdownSubscriber(head_x_joint_sub)
-        simROS.shutdownSubscriber(head_y_joint_sub)
-        simROS.shutdownSubscriber(head_z_joint_sub)
+        --local t=sim.getSimulationTime()*vel % times[#times]
+        p1 = sim.getJointPosition(rightLegJoint1)
+        p2 = sim.getJointPosition(rightLegJoint2)
+        p3 = sim.getJointPosition(rightLegJoint3)
+        p4 = sim.getJointPosition(rightLegJoint4)
+        p5 = sim.getJointPosition(rightLegJoint5)
+        p6 = sim.getJointPosition(rightLegJoint6)
         
-        simROS.shutdownSubscriber(right_shoulder_rotate_joint_sub)
-        simROS.shutdownSubscriber(right_shoulder_sideways_joint_sub)
-        simROS.shutdownSubscriber(right_elbow_joint_sub)
-        simROS.shutdownSubscriber(right_wrist_joint_sub)
+        p7 = sim.getJointPosition(leftLegJoint1)
+        p8 = sim.getJointPosition(leftLegJoint2)
+        p9 = sim.getJointPosition(leftLegJoint3)
+        p10 = sim.getJointPosition(leftLegJoint4)
+        p11 = sim.getJointPosition(leftLegJoint5)
+        p12 = sim.getJointPosition(leftLegJoint6)
         
-        simROS.shutdownSubscriber(left_shoulder_rotate_joint_sub)
-        simROS.shutdownSubscriber(left_shoulder_sideways_joint_sub)
-        simROS.shutdownSubscriber(left_elbow_joint_sub)
-        simROS.shutdownSubscriber(left_wrist_joint_sub)
+        p13 = sim.getJointPosition(neckJoint1)
+        p14 = sim.getJointPosition(neckJoint2)
         
-        simROS.shutdownSubscriber(waist_x_joint_sub)
-        simROS.shutdownSubscriber(waist_y_joint_sub)
-        simROS.shutdownSubscriber(waist_z_joint_sub)
+        p15 = sim.getJointPosition(leftArmJoint1)
+        p16 = sim.getJointPosition(leftArmJoint2)
+        p17 = sim.getJointPosition(leftArmJoint3)
         
-        simROS.shutdownSubscriber(right_hip_sideways_joint_sub)
-        simROS.shutdownSubscriber(right_hip_forward_joint_sub)
-        simROS.shutdownSubscriber(right_thight_joint_sub)
-        simROS.shutdownSubscriber(right_knee_joint_sub)
-        simROS.shutdownSubscriber(right_upper_ankle_joint_sub)
-        simROS.shutdownSubscriber(right_lower_ankle_joint_sub)
+        p18 = sim.getJointPosition(rightArmJoint1)
+        p19 = sim.getJointPosition(rightArmJoint2)
+        p20 = sim.getJointPosition(rightArmJoint3)
         
-        simROS.shutdownSubscriber(left_hip_sideways_joint_sub)
-        simROS.shutdownSubscriber(left_hip_forward_joint_sub)
-        simROS.shutdownSubscriber(left_thight_joint_sub)
-        simROS.shutdownSubscriber(left_knee_joint_sub)
-        simROS.shutdownSubscriber(left_upper_ankle_joint_sub)
-        simROS.shutdownSubscriber(left_lower_ankle_joint_sub)
-    end
-end
-
+        val = {}
+        val.data = {p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12,p13,p14,p15,p16,p17,p18,p19,p20}
         -- sim.addLog(sim.verbosity_scriptinfos, tostring(p1))
         -- sim.addLog(sim.verbosity_scriptinfos, tostring(p2))
         -- sim.addLog(sim.verbosity_scriptinfos, tostring(p3))
@@ -398,3 +169,9 @@ end
         -- sim.addLog(sim.verbosity_scriptinfos, tostring(p19))
         -- sim.addLog(sim.verbosity_scriptinfos, tostring(p20))
         -- sim.addLog(sim.verbosity_scriptinfos, '\n')
+        --val.data = {1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,1,2,3,}
+        
+        simROS.publish(statePub, val)
+        
+    end
+end 
