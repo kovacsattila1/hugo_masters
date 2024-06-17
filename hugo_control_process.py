@@ -712,7 +712,7 @@ if __name__ == '__main__':
 
     def state_cb(msg):
         # if state_cb_enable 
-        print("state callback called!!!", flush=True)
+        # print("state callback called!!!", flush=True)
 
         global actual_joint_positions
         global actual_pos
@@ -783,7 +783,7 @@ if __name__ == '__main__':
 
 
     def simState_cb(msg):
-        print("simstate callback called!!!!", flush=True)
+        # print("simstate callback called!!!!", flush=True)
 
         global sim_state
         global got_simstate
@@ -888,7 +888,7 @@ if __name__ == '__main__':
 
 
     def step_cb(msg):
-        print("mydebug - step callback called!!!", flush=True)
+        # print("mydebug - step callback called!!!", flush=True)
 
         global first
 
@@ -922,7 +922,7 @@ if __name__ == '__main__':
         # while not got_position and not got_orientiation and not got_joint_positions:
         while not got_state:
             time.sleep(0.001)
-            print("waiting for state, now it's ", got_state, flush=True)
+            # print("waiting for state, now it's ", got_state, flush=True)
         
         got_state = False
         #setting default values for next cycle
@@ -947,7 +947,7 @@ if __name__ == '__main__':
             #     time.sleep(0.001)
                 # print("waiting for restart")
             # print("restarted!!!")
-            print("starting the reset process", flush=True)
+            # print("starting the reset process", flush=True)
 
             stop_publisher.publish(Bool(True))
             time.sleep(0.5)
@@ -967,8 +967,6 @@ if __name__ == '__main__':
             # time.sleep(5)
             # print("check noww!!!!!!!")
             
-            
-
             # got_state = False
             return
 
