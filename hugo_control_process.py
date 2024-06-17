@@ -949,12 +949,29 @@ if __name__ == '__main__':
             # print("restarted!!!")
             # print("starting the reset process", flush=True)
 
+            # stop_publisher.publish(Bool(True))
+            # time.sleep(1)
+            # sync_publisher.publish(Bool(True))
+            # time.sleep(1)
+            # start_publisher.publish(Bool(True))  #start simulation
+            # time.sleep(2)
+            delay = 0.3
+
             stop_publisher.publish(Bool(True))
-            time.sleep(0.5)
-            sync_publisher.publish(Bool(True))
-            time.sleep(1)
+            # print("stop", flush=True)
+            time.sleep(delay)
+
+            sync_publisher.publish(Bool(True))   #synchronize
+            # print("sync", flush=True)
+            time.sleep(delay)
+
             start_publisher.publish(Bool(True))  #start simulation
-            time.sleep(1)
+            # print("start sim", flush=True)
+            time.sleep(delay)
+
+            step_publisher.publish(Bool(True))   #next step
+            # print("trig next", flush=True)
+            time.sleep(delay)
 
             # print("waiting before triggering next step", flush=True)
             # time.sleep(2)
@@ -973,34 +990,34 @@ if __name__ == '__main__':
 
 
 
-        # if first:
-        #     if (actual_pos != [0,0,0]) and (actual_ori != [0,0,0]):
-        #         m2s.put(state)
-        #         first = 0
-        #         original_pos = actual_pos
-        #         original_ori = actual_ori
-        #     else:
-        #         print("Bad position and orientation initialization avoided!")
-        #         return
-        # else:
-        #     m2s.put(state)
-        #     reward, reward_values = reward_function(actual_pos, actual_ori)
-        #     m2s.put(reward)
-        #     q4.put(reward_values)
-        #     done = is_it_done(actual_pos)
-        #     m2s.put(done)
+        if first:
+            if (actual_pos != [0,0,0]) and (actual_ori != [0,0,0]):
+                m2s.put(state)
+                first = 0
+                original_pos = actual_pos
+                original_ori = actual_ori
+            else:
+                print("Bad position and orientation initialization avoided!")
+                return
+        else:
+            m2s.put(state)
+            reward, reward_values = reward_function(actual_pos, actual_ori)
+            m2s.put(reward)
+            q4.put(reward_values)
+            done = is_it_done(actual_pos)
+            m2s.put(done)
 
-        # action = s2m.get(block=True)
+        action = s2m.get(block=True)
 
-        # # mapped_action = list(map(map_to_discrete_range, action[0].tolist()))
+        # mapped_action = list(map(map_to_discrete_range, action[0].tolist()))
 
-        # mapped_action = action[0].tolist()
-        # mapped_action = [x / 0.05 for x in mapped_action]
+        mapped_action = action[0].tolist()
+        mapped_action = [x / 0.05 for x in mapped_action]
 
         action_packet = Float32MultiArray()
-        # action_packet.data = mapped_action
+        action_packet.data = mapped_action
 
-        action_packet.data = [1] * 20
+        # action_packet.data = [1] * 20
     
         joint_publisher0.publish(action_packet)
 
@@ -1035,14 +1052,14 @@ if __name__ == '__main__':
     # dummy_joint_control("something")
 
 
-    # mp.set_start_method('spawn')
+    mp.set_start_method('spawn')
     # manager = mp.Manager()
-    # m2s = mp.Queue()
-    # s2m = mp.Queue()
+    m2s = mp.Queue()
+    s2m = mp.Queue()
 
-    # p1 = mp.Process(target=joint_control, args=(m2s, s2m), daemon=True)
-    # # p1 = Process(target=joint_control, args=(q1,))
-    # p1.start()
+    p1 = mp.Process(target=joint_control, args=(m2s, s2m), daemon=True)
+    # p1 = Process(target=joint_control, args=(q1,))
+    p1.start()
 
     # time.sleep(3) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 
@@ -1054,12 +1071,12 @@ if __name__ == '__main__':
     # p3 = Process(target=graph_state, args=[])
     # p3.start()
 
-    # q4 = Queue()
+    q4 = Queue()
     # p4 = Process(target=graph_reward, args=[q4,])
     # p4.start()
     
     rospy.init_node('hugo_main')
-    q_size = 10
+    q_size = 1
 
     sync_publisher = rospy.Publisher("/enableSyncMode", Bool, queue_size=q_size)#, latch=True)
     start_publisher = rospy.Publisher("/startSimulation", Bool, queue_size=q_size)#, latch=True)
@@ -1085,12 +1102,16 @@ if __name__ == '__main__':
     delay = 0.3
 
     sync_publisher.publish(z)   #synchronize
+    print("sync", flush=True)
     time.sleep(delay)
     start_publisher.publish(z)  #start simulation
+    print("start sim", flush=True)
     time.sleep(delay)
     step_publisher.publish(z)   #next step
+    print("trig next", flush=True)
     time.sleep(delay)
     step_publisher.publish(z) #needed because the simulator doesnt publish the states with only one step
+    print("trig next", flush=True)
     # time.sleep(delay)
     
     
