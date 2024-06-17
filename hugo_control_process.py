@@ -956,16 +956,16 @@ if __name__ == '__main__':
             start_publisher.publish(Bool(True))  #start simulation
             time.sleep(1)
 
-            print("waiting before triggering next step", flush=True)
-            time.sleep(2)
-            print("waiting done")
+            # print("waiting before triggering next step", flush=True)
+            # time.sleep(2)
+            # print("waiting done")
 
-            got_state = False
+            # got_state = False
             step_publisher.publish(Bool(True)) #trigger next step
             time.sleep(1)
-            print("finished the reset process\n\n", flush=True)
-            time.sleep(5)
-            print("check noww!!!!!!!")
+            # print("finished the reset process\n\n", flush=True)
+            # time.sleep(5)
+            # print("check noww!!!!!!!")
             
             
 
@@ -1006,14 +1006,14 @@ if __name__ == '__main__':
     
         joint_publisher0.publish(action_packet)
 
-        print("waiting before triggering next step", flush=True)
-        time.sleep(2)
-        print("waiting done", flush=True)
+        # print("waiting before triggering next step", flush=True)
+        # time.sleep(2)
+        # print("waiting done", flush=True)
 
         step_publisher.publish(z)
-        print("not fallen -> new step activated\n\n", flush=True)
+        # print("not fallen -> new step activated\n\n", flush=True)
 
-        time.sleep(1)
+        # time.sleep(1)
         
         return
     
