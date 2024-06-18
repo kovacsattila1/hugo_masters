@@ -126,7 +126,7 @@ def joint_control(m2s, s2m):
     n_test_cycles = 10
     batch_size = 1
     done = 0
-    reward_threshold = 1
+    reward_threshold = 5
 
     agent = DDPG(gamma,
                 tau,
@@ -502,7 +502,7 @@ def graph_reward(q):
     fig = plt.figure(figsize=(12, 12))
 
     # Define grid spec
-    gs = fig.add_gridspec(3, 3)
+    gs = fig.add_gridspec(4, 3)
 
     # Create subplots
     ax1 = fig.add_subplot(gs[0, 0])
@@ -511,7 +511,8 @@ def graph_reward(q):
     ax4 = fig.add_subplot(gs[1, 0])
     ax5 = fig.add_subplot(gs[1, 1])
     ax6 = fig.add_subplot(gs[1, 2])
-    ax7 = fig.add_subplot(gs[2, :])
+    ax7 = fig.add_subplot(gs[2, 1])
+    ax8 = fig.add_subplot(gs[3, :])
 
     reward_values = q.get()
 
@@ -528,6 +529,7 @@ def graph_reward(q):
     y5 = crw[mykeys[4]]
     y6 = crw[mykeys[5]]
     y7 = crw[mykeys[6]]
+    y8 = crw[mykeys[7]]
 
     # Create initial plots
     lines = []
@@ -538,6 +540,7 @@ def graph_reward(q):
     lines.append(ax5.plot(x, y5, color='c')[0])
     lines.append(ax6.plot(x, y6, color='y')[0])
     lines.append(ax7.plot(x, y7, color='k')[0])
+    lines.append(ax8.plot(x, y8, color='k')[0])
 
     
 
@@ -549,9 +552,9 @@ def graph_reward(q):
     ax5.set_title(mykeys[4])
     ax6.set_title(mykeys[5])
     ax7.set_title(mykeys[6])
-
+    ax8.set_title(mykeys[7])
     # Set labels for subplots
-    for ax in [ax1, ax2, ax3, ax4, ax5, ax6, ax7]:
+    for ax in [ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8]:
         ax.set_xlabel('x')
         ax.set_ylabel('time')
 
@@ -605,6 +608,9 @@ def graph_reward(q):
         ax7.set_ylim(min(crw[mykeys[6]]), max(crw[mykeys[6]]))
         ax7.set_xlim(-0.1, step_list[-1])
 
+        ax8.set_ylim(min(crw[mykeys[7]]), max(crw[mykeys[7]]))
+        ax8.set_xlim(-0.1, step_list[-1])
+
 
         lines[0].set_ydata(crw[mykeys[0]])
         lines[1].set_ydata(crw[mykeys[1]])
@@ -613,6 +619,7 @@ def graph_reward(q):
         lines[4].set_ydata(crw[mykeys[4]])
         lines[5].set_ydata(crw[mykeys[5]])
         lines[6].set_ydata(crw[mykeys[6]])
+        lines[7].set_ydata(crw[mykeys[7]])
 
         for line in lines:
             line.set_xdata(step_list)
@@ -806,7 +813,59 @@ if __name__ == '__main__':
         return False
     
 
-    def reward_function(actual_pos, actual_ori):
+    def reward_function(actual_pos, actual_ori, actual_joint_positions):
+
+        def radians_to_degrees(radian_list):
+            return [radian * (180 / math.pi) for radian in radian_list]
+
+
+
+        def get_limited_joints(joint_pos):
+
+            buffer = 2
+
+            limits = [ \
+                [-45, 45],
+                [-45, 45],
+                [-90, 90],
+                [-45, 135],
+                [-45, 45],
+                [-45, 45],
+                #
+                [-45, 45],
+                [-45, 45],
+                [-90, 90],
+                [-45, 135],
+                [-45, 45],
+                [-45, 45],
+                #
+                [-90, 90],
+                [-45, 45],
+                #
+                [-180, 90],
+                [-15, 90],
+                [-45, 45],
+                #
+                [-180, 90],
+                [-15, 90],
+                [-45, 45],
+            ]
+
+            counter = 0
+            joints_limited = []
+
+            for i in range(len(joint_pos)):
+                if (joint_pos[i] <= (limits[i][0] + buffer)) or \
+                    (joint_pos[i] >= (limits[i][1] - buffer)): 
+                    counter += 1
+                    joints_limited.append(1)
+
+                else:
+                    joints_limited.append(0)
+
+            return counter, joints_limited
+
+
         global original_pos
         global original_ori
 
@@ -833,6 +892,7 @@ if __name__ == '__main__':
         x_rot_weight = 1.5
         y_rot_weight = 7
         z_rot_weight = 3
+        limits_weight = 0.5
         
 
         #megtett tav
@@ -846,6 +906,12 @@ if __name__ == '__main__':
         x_rot_reward = abs(abs(oxo) - abs(axo))
         y_rot_reward = abs(abs(oyo) - abs(ayo))
         z_rot_reward = abs(abs(ozo) - abs(azo))
+
+
+        deg_joint_pos = radians_to_degrees(actual_joint_positions)
+        # print(deg_joint_pos)
+        limits_reward, joints_limited = get_limited_joints(deg_joint_pos)
+
     
 
         # reward = \
@@ -862,7 +928,7 @@ if __name__ == '__main__':
         x_rot = x_rot_weight        * x_rot_reward      * -1
         y_rot = y_rot_weight        * y_rot_reward      * -1
         z_rot = z_rot_weight        * z_rot_reward      * -1
-
+        limits = limits_weight      * limits_reward     * -1
         
         reward = 0 \
         + forward \
@@ -870,7 +936,8 @@ if __name__ == '__main__':
         + vertical \
         + x_rot \
         + y_rot \
-        + z_rot 
+        + z_rot \
+        + limits
 
         reward_values = \
         {
@@ -880,6 +947,7 @@ if __name__ == '__main__':
             'x_rot'     : [x_rot],
             'y_rot'     : [y_rot],
             'z_rot'     : [z_rot],
+            'limits'    : [limits],
             'reward'    : [reward]
         }
 
@@ -1001,7 +1069,7 @@ if __name__ == '__main__':
                 return
         else:
             m2s.put(state)
-            reward, reward_values = reward_function(actual_pos, actual_ori)
+            reward, reward_values = reward_function(actual_pos, actual_ori, actual_joint_positions)
             m2s.put(reward)
             q4.put(reward_values)
             done = is_it_done(actual_pos)
@@ -1072,8 +1140,8 @@ if __name__ == '__main__':
     # p3.start()
 
     q4 = Queue()
-    # p4 = Process(target=graph_reward, args=[q4,])
-    # p4.start()
+    p4 = Process(target=graph_reward, args=[q4,])
+    p4.start()
     
     rospy.init_node('hugo_main')
     q_size = 1
