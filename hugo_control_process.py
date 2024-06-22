@@ -28,6 +28,10 @@ from utils.noise import OrnsteinUhlenbeckActionNoise
 from torch.utils.tensorboard import SummaryWriter
 import torch.multiprocessing as mp
 import os
+from functools import partial
+from DDPG.ddpg_torch import Agent
+from DDPG.utils import plot_learning_curve
+
 # import torch.multiprocessing.queue as queue
 # from multiprocessing import Manager
 
@@ -85,6 +89,87 @@ actual_time = 0
 # ori_z = 0
 
 
+#---------------------------------------------------------------------------------
+
+
+def joint_control_ddpg(m2s, s2m):
+    class Env:
+        def __init__(self):
+            rospy.init_node('hugo_vision')
+            self.observation_space  = torch.tensor(96*[0])
+            self.action_space = torch.tensor(26 * [0])
+
+            q_size = 10
+            self.sync_publisher = rospy.Publisher("/enableSyncMode", Bool, queue_size=q_size)#, latch=True)
+            self.start_publisher = rospy.Publisher("/startSimulation", Bool, queue_size=q_size)#, latch=True)
+            self.stop_publisher = rospy.Publisher("/stopSimulation", Bool, queue_size=q_size)#, latch=True)
+            self.step_publisher = rospy.Publisher("/triggerNextStep", Bool, queue_size=q_size)#, latch=True)
+
+        def reset(self):
+            print("reset called")
+
+            delay = 0.3
+
+            self.stop_publisher.publish(Bool(True))
+            time.sleep(delay)
+
+            self.sync_publisher.publish(Bool(True))   #synchronize
+            time.sleep(delay)
+
+            self.start_publisher.publish(Bool(True))  #start simulation
+            time.sleep(delay)
+
+            self.step_publisher.publish(Bool(True))   #next step
+            time.sleep(delay)
+
+    env = Env()
+
+    # env = gym.make('LunarLanderContinuous-v2')
+    agent = Agent(alpha=0.0001, beta=0.001, 
+                    input_dims=env.observation_space.shape, tau=0.001,
+                    batch_size=64, fc1_dims=400, fc2_dims=300, 
+                    n_actions=env.action_space.shape[0])
+    n_games = 1000
+    filename = 'LunarLander_alpha_' + str(agent.alpha) + '_beta_' + \
+                str(agent.beta) + '_' + str(n_games) + '_games'
+    figure_file = 'plots/' + filename + '.png'
+
+    best_score = 5
+    score_history = []
+    for i in range(n_games):
+        env.reset()
+        observation = m2s.get()
+
+        done = False
+        score = 0
+        agent.noise.reset()
+        while not done:
+            action = agent.choose_action(observation)
+            s2m.put([torch.tensor(action)])
+            # observation_, reward, done, info = env.step(action)
+
+            observation_ = m2s.get()
+            reward = m2s.get()
+            done = m2s.get()
+
+            agent.remember(observation, action, reward, observation_, done)
+            agent.learn()
+            score += reward
+            observation = observation_
+        score_history.append(score)
+        avg_score = np.mean(score_history[-100:])
+
+        if avg_score > best_score:
+            best_score = avg_score
+            agent.save_models()
+
+        print('episode ', i, 'score %.1f' % score,
+                'average score %.1f' % avg_score)
+    x = [i+1 for i in range(n_games)]
+    plot_learning_curve(x, score_history, figure_file)
+
+
+#------------------------------------------------------------------------------------------------------------
 
 
 #------------------------------------------------------------------------------------------------------------
@@ -431,14 +516,11 @@ def graph_state():
         padded_pos_min = pos_min - graph_padding
         padded_pos_max = pos_max + graph_padding
 
-
         ori_min = min([min(ori_x_list), min(ori_y_list), min(ori_z_list)])
         ori_max = max([max(ori_x_list), max(ori_y_list), max(ori_z_list)])
 
         padded_ori_min = ori_min - graph_padding
         padded_ori_max = ori_max + graph_padding
-
-
 
         ax1.set_ylim(padded_pos_min, padded_pos_max)
         ax1.set_xlim(-0.1, time_list[-1])
@@ -477,19 +559,16 @@ def graph_state():
 
 #------------------------------------------------------------------------------------------------------------
 
+def graph_windowed_reward(q):
 
+    # print("mydebug - graph_reward started", flush=True)
 
-
-def graph_reward(q):
-
-    print("mydebug - graph_reward started", flush=True)
-
-    def sigalrm_handler(*args):
-        print("mydebug - \n\n\n\n!!!!\nSIGALRM RECEIVED\n\n\n", flush=True)
-        fig.clf()
+    # def sigalrm_handler(*args):
+    #     print("mydebug - \n\n\n\n!!!!\nSIGALRM RECEIVED\n\n\n", flush=True)
+    #     # fig.clf()
     
-    signal.signal(signal.SIGALRM, sigalrm_handler)
-    print("mydebug - Signal handler is set up!!!!!", flush=True)
+    # signal.signal(signal.SIGALRM, sigalrm_handler)
+    # print("mydebug - Signal handler is set up!!!!!", flush=True)
     
 
     step_counter = 0
@@ -611,6 +690,209 @@ def graph_reward(q):
         ax8.set_ylim(min(crw[mykeys[7]]), max(crw[mykeys[7]]))
         ax8.set_xlim(-0.1, step_list[-1])
 
+
+        lines[0].set_ydata(crw[mykeys[0]])
+        lines[1].set_ydata(crw[mykeys[1]])
+        lines[2].set_ydata(crw[mykeys[2]])
+        lines[3].set_ydata(crw[mykeys[3]])
+        lines[4].set_ydata(crw[mykeys[4]])
+        lines[5].set_ydata(crw[mykeys[5]])
+        lines[6].set_ydata(crw[mykeys[6]])
+        lines[7].set_ydata(crw[mykeys[7]])
+
+        for line in lines:
+            line.set_xdata(step_list)
+
+        fig.canvas.draw() 
+        fig.canvas.flush_events() 
+
+
+
+#------------------------------------------------------------------------------------------------------------
+
+
+
+def graph_current_reward(q):
+
+    print("mydebug - graph_current_reward started", flush=True)
+
+    myflag = 0
+
+    def sigalrm_handler(*args):
+        nonlocal myflag
+        myflag = 1
+
+
+    signal.signal(signal.SIGALRM, sigalrm_handler)
+    print("mydebug - Signal handler is set up!!!!!", flush=True)
+    
+
+    step_counter = 0
+
+    #interactive mode on
+    plt.ion() 
+    plt.tight_layout(pad = 5) #TODO
+
+    # Create figure
+    fig = plt.figure(figsize=(12, 12))
+
+    # Define grid spec
+    gs = fig.add_gridspec(4, 3)
+
+    # Create subplots
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax3 = fig.add_subplot(gs[0, 2])
+    ax4 = fig.add_subplot(gs[1, 0])
+    ax5 = fig.add_subplot(gs[1, 1])
+    ax6 = fig.add_subplot(gs[1, 2])
+    ax7 = fig.add_subplot(gs[2, 1])
+    ax8 = fig.add_subplot(gs[3, :])
+
+    reward_values = q.get()
+
+    crw = reward_values #copy of reward_values
+
+    mykeys = list(reward_values.keys())
+
+    # Initialize data
+    x = [step_counter]
+    y1 = crw[mykeys[0]]
+    y2 = crw[mykeys[1]]
+    y3 = crw[mykeys[2]]
+    y4 = crw[mykeys[3]]
+    y5 = crw[mykeys[4]]
+    y6 = crw[mykeys[5]]
+    y7 = crw[mykeys[6]]
+    y8 = crw[mykeys[7]]
+
+    # Create initial plots
+    lines = []
+    lines.append(ax1.plot(x, y1, color='b')[0])
+    lines.append(ax2.plot(x, y2, color='r')[0])
+    lines.append(ax3.plot(x, y3, color='g')[0])
+    lines.append(ax4.plot(x, y4, color='m')[0])
+    lines.append(ax5.plot(x, y5, color='c')[0])
+    lines.append(ax6.plot(x, y6, color='y')[0])
+    lines.append(ax7.plot(x, y7, color='k')[0])
+    lines.append(ax8.plot(x, y8, color='k')[0])
+
+    
+
+    # Set titles for subplots
+    ax1.set_title(mykeys[0])
+    ax2.set_title(mykeys[1])
+    ax3.set_title(mykeys[2])
+    ax4.set_title(mykeys[3])
+    ax5.set_title(mykeys[4])
+    ax6.set_title(mykeys[5])
+    ax7.set_title(mykeys[6])
+    ax8.set_title(mykeys[7])
+    # Set labels for subplots
+    for ax in [ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8]:
+        ax.set_xlabel('x')
+        ax.set_ylabel('time')
+
+    graph_padding = 0.1
+
+    counter = 0
+
+    step_list = []
+
+    step_list.append(counter)
+
+    skip = 0
+    while True:
+        bla = 0
+        # print("while ", myflag)
+        if myflag == 1:
+            # print('myflag activated!!!')
+            # crw = reward_values = q.get()
+            # counter = 0
+            # step_list = [counter]
+            # skip = 1
+            # # print("mydebug crw", crw)
+            
+            # continue
+            for key in list(crw.keys()):
+                crw[key]=[]
+            # print("mydebug crw" ,crw)
+            counter = -1
+            step_list = []
+            myflag = 0
+            bla = 1
+
+        # if not skip:
+        #     # print("not skip entered")
+        #     reward_values = q.get()
+        #     counter += 1
+        #     step_list.append(counter)
+        #     for key in list(reward_values.keys()):
+        #         crw[key].append(reward_values[key][0])
+        
+
+
+            # print("not skip entered")
+        reward_values = q.get()
+
+        if bla:
+            print("first values after fall: ", reward_values)
+
+        counter += 1
+        step_list.append(counter)
+
+        for key in list(reward_values.keys()):
+            crw[key].append(reward_values[key][0])
+
+        # skip = 0
+
+
+        # print("len step", len(step_list))
+        # print("len data", len(crw[mykeys[0]]))
+
+        graph_padding = 1.5
+        
+        first_min = min([min(crw[mykeys[0]]), min(crw[mykeys[1]]), min(crw[mykeys[2]])])
+        first_max = max([max(crw[mykeys[0]]), max(crw[mykeys[1]]), max(crw[mykeys[2]])])
+
+        padded_first_min = first_min - graph_padding
+        padded_first_max = first_max + graph_padding
+
+        second_min = min([min(crw[mykeys[3]]), min(crw[mykeys[4]]), min(crw[mykeys[5]])])
+        second_max = max([max(crw[mykeys[3]]), max(crw[mykeys[4]]), max(crw[mykeys[5]])])
+
+        padded_second_min = second_min - graph_padding
+        padded_second_max = second_max + graph_padding
+
+        ax1.set_ylim(padded_first_min, padded_first_max)
+        ax1.set_xlim(-0.1, step_list[-1])
+
+        ax2.set_ylim(padded_first_min, padded_first_max)
+        ax2.set_xlim(-0.1, step_list[-1])
+
+        ax3.set_ylim(padded_first_min, padded_first_max)
+        ax3.set_xlim(-0.1, step_list[-1])
+
+        ax4.set_ylim(padded_second_min, padded_second_max)
+        ax4.set_xlim(-0.1, step_list[-1])
+
+        ax5.set_ylim(padded_second_min, padded_second_max)
+        ax5.set_xlim(-0.1, step_list[-1])
+
+        ax6.set_ylim(padded_second_min, padded_second_max)
+        ax6.set_xlim(-0.1, step_list[-1])
+
+        third_min = min(crw[mykeys[6]]) - graph_padding
+        third_max = max(crw[mykeys[6]]) + graph_padding
+
+        ax7.set_ylim(third_min, third_max)
+        ax7.set_xlim(-0.1, step_list[-1])
+
+        fourth_min = min(crw[mykeys[7]]) - graph_padding
+        fourth_max = max(crw[mykeys[7]]) + graph_padding
+
+        ax8.set_ylim(fourth_min, fourth_max)
+        ax8.set_xlim(-0.1, step_list[-1])
 
         lines[0].set_ydata(crw[mykeys[0]])
         lines[1].set_ydata(crw[mykeys[1]])
@@ -808,7 +1090,6 @@ if __name__ == '__main__':
     def is_fallen(pos):
         global sim_state
         if pos[2] < 0.4:
-            # os.kill(p4.pid, signal.SIGALRM)
             return True
         return False
     
@@ -893,7 +1174,13 @@ if __name__ == '__main__':
         y_rot_weight = 7
         z_rot_weight = 3
         limits_weight = 0.5
+        fall_weight = 0
         
+        if azp < 0.4:
+            fall_weight = 30
+
+
+        fall_reward = 1
 
         #megtett tav
         forward_reward = abs(oxp) + axp
@@ -929,7 +1216,11 @@ if __name__ == '__main__':
         y_rot = y_rot_weight        * y_rot_reward      * -1
         z_rot = z_rot_weight        * z_rot_reward      * -1
         limits = limits_weight      * limits_reward     * -1
+        fall = fall_weight          * fall_reward       * -1
         
+        # print(azp)
+        # print(fall)
+
         reward = 0 \
         + forward \
         + lateral \
@@ -937,7 +1228,8 @@ if __name__ == '__main__':
         + x_rot \
         + y_rot \
         + z_rot \
-        + limits
+        + limits \
+        + fall
 
         reward_values = \
         {
@@ -1007,9 +1299,32 @@ if __name__ == '__main__':
 
         state = [*pos_shift_reg, *ori_shift_reg, *joint_positions_shift_reg]
 
-        
-        if(is_fallen(actual_pos)):
-            
+        #check if fallen
+        fallen = is_fallen(actual_pos)
+
+        if first:
+            if (actual_pos != [0,0,0]) and (actual_ori != [0,0,0]):
+                m2s.put(state)
+                first = 0
+                original_pos = actual_pos
+                original_ori = actual_ori
+            else:
+                print("Bad position and orientation initialization avoided!")
+                return
+        else:
+            m2s.put(state)
+            reward, reward_values = reward_function(actual_pos, actual_ori, actual_joint_positions)
+            m2s.put(reward)
+            q4.put(reward_values)
+            done = is_it_done(actual_pos)
+            m2s.put(done or fallen)
+
+
+        if(fallen):
+            # print(reward_values)
+            # time.sleep(3)
+            os.kill(p4.pid, signal.SIGALRM)
+            time.sleep(3)
 
             # while sim_state == 1:
             #     time.sleep(0.001)
@@ -1056,26 +1371,8 @@ if __name__ == '__main__':
             return
 
 
-
-
-        if first:
-            if (actual_pos != [0,0,0]) and (actual_ori != [0,0,0]):
-                m2s.put(state)
-                first = 0
-                original_pos = actual_pos
-                original_ori = actual_ori
-            else:
-                print("Bad position and orientation initialization avoided!")
-                return
-        else:
-            m2s.put(state)
-            reward, reward_values = reward_function(actual_pos, actual_ori, actual_joint_positions)
-            m2s.put(reward)
-            q4.put(reward_values)
-            done = is_it_done(actual_pos)
-            m2s.put(done)
-
         action = s2m.get(block=True)
+        # print(action)
 
         # mapped_action = list(map(map_to_discrete_range, action[0].tolist()))
 
@@ -1125,7 +1422,7 @@ if __name__ == '__main__':
     m2s = mp.Queue()
     s2m = mp.Queue()
 
-    p1 = mp.Process(target=joint_control, args=(m2s, s2m), daemon=True)
+    p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m), daemon=True)
     # p1 = Process(target=joint_control, args=(q1,))
     p1.start()
 
@@ -1140,8 +1437,11 @@ if __name__ == '__main__':
     # p3.start()
 
     q4 = Queue()
-    p4 = Process(target=graph_reward, args=[q4,])
+    p4 = Process(target=graph_current_reward, args=[q4,])
     p4.start()
+
+    p5 = Process(target=graph_windowed_reward, args=[q4,])
+    p5.start()
     
     rospy.init_node('hugo_main')
     q_size = 1
@@ -1155,7 +1455,7 @@ if __name__ == '__main__':
 
 
 
-    #rospy.Subscriber("/simulationState", Int32, simState_cb)
+    rospy.Subscriber("/simulationState", Int32, simState_cb)
     rospy.Subscriber("/state", Float32MultiArray, state_cb, queue_size = q_size)
     rospy.Subscriber("/simulationStepDone", Bool, step_cb, queue_size = q_size)#, latch=True)
     
@@ -1211,8 +1511,9 @@ if __name__ == '__main__':
 
     while not rospy.is_shutdown():
         # print("main running")
+        # print(counter)
 
-        # #watchdog mechanism
+        #watchdog mechanism
         # if got_simstate:
         #     current_state = sim_state.data
         #     if (current_state == 0) and (prev_state == 0): #ha nem futott es nem is fut
