@@ -32,9 +32,8 @@ from functools import partial
 from DDPG.ddpg_torch import Agent
 from DDPG.utils import plot_learning_curve
 
-# import torch.multiprocessing.queue as queue
-# from multiprocessing import Manager
 
+cold_start = False
 
 got_state = False
 
@@ -52,18 +51,11 @@ logger.setLevel(logging.DEBUG)
 # Instantiate CvBridge
 bridge = CvBridge()
 
-# position_cb_enable = True
-# orientation_cb_enable = True
-# joint_positions_cb_enable = True
 
 got_position = False
-# got_orientiation = False
-# got_joint_positions = False
 got_simstate = False
 
-# got_position = True
-# got_orientiation = True
-# got_joint_positions = True
+
 
 time_list = [0]
 pos_x_list = [0]
@@ -77,54 +69,32 @@ actual_joint_positions = []
 actual_pos = []
 actual_ori = []
 actual_time = 0
-# actual_joint_positions = [0] * 20 
-
-
-
-# pos_x = 0
-# pos_y = 0
-# pos_z = 0
-# ori_x = 0
-# ori_y = 0
-# ori_z = 0
-
+step_cb_enable = False
 
 #---------------------------------------------------------------------------------
 
 
-def joint_control_ddpg(m2s, s2m):
-    class Env:
+def joint_control_ddpg(m2s, s2m, pid):
+
+    # time.sleep(3)
+    # os.kill(pid, signal.SIGALRM)
+    # m2s.get()
+    # time.sleep(3)
+
+    class Coppelia:
         def __init__(self):
             rospy.init_node('hugo_vision')
             self.observation_space  = torch.tensor(96*[0])
             self.action_space = torch.tensor(26 * [0])
 
-            q_size = 10
-            self.sync_publisher = rospy.Publisher("/enableSyncMode", Bool, queue_size=q_size)#, latch=True)
-            self.start_publisher = rospy.Publisher("/startSimulation", Bool, queue_size=q_size)#, latch=True)
-            self.stop_publisher = rospy.Publisher("/stopSimulation", Bool, queue_size=q_size)#, latch=True)
-            self.step_publisher = rospy.Publisher("/triggerNextStep", Bool, queue_size=q_size)#, latch=True)
-
         def reset(self):
             print("reset called")
+            os.kill(pid, signal.SIGALRM)
+            state = m2s.get()
+            return state
 
-            delay = 0.3
+    env = Coppelia()
 
-            self.stop_publisher.publish(Bool(True))
-            time.sleep(delay)
-
-            self.sync_publisher.publish(Bool(True))   #synchronize
-            time.sleep(delay)
-
-            self.start_publisher.publish(Bool(True))  #start simulation
-            time.sleep(delay)
-
-            self.step_publisher.publish(Bool(True))   #next step
-            time.sleep(delay)
-
-    env = Env()
-
-    # env = gym.make('LunarLanderContinuous-v2')
     agent = Agent(alpha=0.0001, beta=0.001, 
                     input_dims=env.observation_space.shape, tau=0.001,
                     batch_size=64, fc1_dims=400, fc2_dims=300, 
@@ -136,9 +106,12 @@ def joint_control_ddpg(m2s, s2m):
 
     best_score = 5
     score_history = []
+
+
+
+
     for i in range(n_games):
-        env.reset()
-        observation = m2s.get()
+        observation = env.reset()
 
         done = False
         score = 0
@@ -146,16 +119,26 @@ def joint_control_ddpg(m2s, s2m):
         while not done:
             action = agent.choose_action(observation)
             s2m.put([torch.tensor(action)])
-            # observation_, reward, done, info = env.step(action)
+            # print("action put!!!")
 
+            # observation_, reward, done, info = env.step(action)
             observation_ = m2s.get()
             reward = m2s.get()
             done = m2s.get()
+
+            # print("\nobservation\n", observation, flush=True)
+            # print("\nreward\n", reward, flush=True)
+            # print("\ndone\n", done, flush=True)
+
+            # time.sleep(3)
 
             agent.remember(observation, action, reward, observation_, done)
             agent.learn()
             score += reward
             observation = observation_
+
+
+
         score_history.append(score)
         avg_score = np.mean(score_history[-100:])
 
@@ -174,7 +157,7 @@ def joint_control_ddpg(m2s, s2m):
 
 #------------------------------------------------------------------------------------------------------------
 
-def joint_control(m2s, s2m):
+def joint_control(m2s, s2m, pid):
     print("torch process started!!!", flush=True)
     # rospy.init_node('hugo_control')
     # q_size = 10
@@ -407,12 +390,6 @@ def process_image(q):
 
     rate = rospy.Rate(10)
     while not rospy.is_shutdown():
-        # print(q.empty())
-        # print("hello")
-        # if q.empty():
-        #     print("Nothing in queue of joint_control")
-        # nothing = q.get()
-        # print("process image thread process image thread process image thread process image thread")
         rate.sleep()
 
 
@@ -560,16 +537,6 @@ def graph_state():
 #------------------------------------------------------------------------------------------------------------
 
 def graph_windowed_reward(q):
-
-    # print("mydebug - graph_reward started", flush=True)
-
-    # def sigalrm_handler(*args):
-    #     print("mydebug - \n\n\n\n!!!!\nSIGALRM RECEIVED\n\n\n", flush=True)
-    #     # fig.clf()
-    
-    # signal.signal(signal.SIGALRM, sigalrm_handler)
-    # print("mydebug - Signal handler is set up!!!!!", flush=True)
-    
 
     step_counter = 0
 
@@ -804,39 +771,20 @@ def graph_current_reward(q):
     skip = 0
     while True:
         bla = 0
-        # print("while ", myflag)
         if myflag == 1:
-            # print('myflag activated!!!')
-            # crw = reward_values = q.get()
-            # counter = 0
-            # step_list = [counter]
-            # skip = 1
-            # # print("mydebug crw", crw)
             
-            # continue
             for key in list(crw.keys()):
                 crw[key]=[]
-            # print("mydebug crw" ,crw)
             counter = -1
             step_list = []
             myflag = 0
             bla = 1
 
-        # if not skip:
-        #     # print("not skip entered")
-        #     reward_values = q.get()
-        #     counter += 1
-        #     step_list.append(counter)
-        #     for key in list(reward_values.keys()):
-        #         crw[key].append(reward_values[key][0])
-        
 
-
-            # print("not skip entered")
         reward_values = q.get()
 
         if bla:
-            print("first values after fall: ", reward_values)
+            print("first values after fall: ", reward_values, flush=True)
 
         counter += 1
         step_list.append(counter)
@@ -844,11 +792,6 @@ def graph_current_reward(q):
         for key in list(reward_values.keys()):
             crw[key].append(reward_values[key][0])
 
-        # skip = 0
-
-
-        # print("len step", len(step_list))
-        # print("len data", len(crw[mykeys[0]]))
 
         graph_padding = 1.5
         
@@ -976,27 +919,45 @@ if __name__ == '__main__':
         print("Processes should be joined by now", flush=True)
         exit(0)
 
-
-
     def sigquit_handler(*args):
         print("You pressed Ctrl + \\", flush=True)
 
-        # puse_publisher.publish(Bool(pause_flag))
-        # pause_flag = not pause_flag
+    def sigalrm_handler(*args):
+        global step_cb_enable
+        global cold_start
 
+        cold_start = True
+        print("sigalarm received in main form subprocess", flush = True)
+        z = Bool(True)
 
-    # def sigstop_handler(*args):
-    #     print("You pressed Ctrl + Z")
+        delay = 1
 
+        step_cb_enable = False
 
-    # def joint_positions_cb(data):
-    #     global actual_joint_positions
-    #     global got_joint_positions
-    #     global joint_positions_cb_enable
+        sync_publisher.publish(z)   #synchronize
+        print("sync publisher called", flush=True)
+        time.sleep(delay)
 
-    #     if joint_positions_cb_enable:
-    #         actual_joint_positions = list(data.data)
-    #         got_joint_positions = True
+        stop_publisher.publish(z)  #stop simulation
+        print("stop publisher called", flush=True)
+        time.sleep(delay)
+
+        start_publisher.publish(z)  #start simulation
+        print("start publisher called", flush=True)
+        time.sleep(delay)
+
+        step_publisher.publish(z)   #next step
+        print("trig ", flush=True)
+        time.sleep(delay)
+
+        step_cb_enable = True
+
+        step_publisher.publish(z) #needed because the simulator doesnt publish the states with only one step
+        print("trig next2", flush=True)
+        time.sleep(delay)
+
+        print("sigalarm handling ended", flush = True)
+
 
 
     def state_cb(msg):
@@ -1015,59 +976,8 @@ if __name__ == '__main__':
         actual_ori = data_list[4:7]
         actual_joint_positions = data_list[7:]
 
-        # print("\ncheck correctness")
-        # print(data_list)
-        # print("---")
-        # print(actual_time)
-        # print(actual_pos)
-        # print(actual_ori)
-        # print(actual_joint_positions)
-
         got_state = True
         return 
-
-
-    # def position_cb(data):
-    #     # print("mydebug - position callback called!!!")
-    #     if position_cb_enable:
-    #         global pos_x
-    #         global pos_y
-    #         global pos_z
-    #         global got_position
-
-    #         pos_x = data.x
-    #         pos_y = data.y
-    #         pos_z = data.z
-
-    #         got_position = True
-    #         # print("Position   : x:", data.x, "   y:", data.y, "   :", data.z)
-    
-
-
-    # def orientation_cb(data):
-    #     # print("mydebug - orientation callback called!!!")
-    #     if orientation_cb_enable:
-    #         global ori_x
-    #         global ori_y
-    #         global ori_z
-    #         global got_orientiation 
-
-    #         ori_x = math.degrees(data.x)
-    #         ori_y = math.degrees(data.y)
-    #         ori_z = math.degrees(data.z)
-
-    #         ori_x = data.x
-    #         ori_y = data.y
-    #         ori_z = data.z
-            
-    #         got_orientiation = True
-    #         # print("Orientation   : x:", data.x, "   y:", data.y, "   :", data.z)
-
-
-
-    # def simTime_cb(msg):
-    #     # print("Simulation time: ",msg)
-    #     return
 
 
 
@@ -1076,7 +986,6 @@ if __name__ == '__main__':
 
         global sim_state
         global got_simstate
-        # print("Simulation state: ",msg)
         sim_state = msg
         got_simstate = True
 
@@ -1184,9 +1093,6 @@ if __name__ == '__main__':
 
         #megtett tav
         forward_reward = abs(oxp) + axp
-        # print("forward_reward: ", forward_reward)
-        # print("oxp: ", oxp)
-        # print("axp: ", axp)
         lateral_reward = abs(abs(oyp)-abs(ayp))
         vertical_reward = abs(abs(ozp)-abs(azp))
 
@@ -1196,18 +1102,9 @@ if __name__ == '__main__':
 
 
         deg_joint_pos = radians_to_degrees(actual_joint_positions)
-        # print(deg_joint_pos)
         limits_reward, joints_limited = get_limited_joints(deg_joint_pos)
 
-    
 
-        # reward = \
-        #     forward_weight      * forward_reward \
-        # -   lateral_weigth      * lateral_reward \
-        # -   vertical_weigth     * vertical_reward \
-        # -   x_rot_weight        * x_rot_reward \
-        # -   y_rot_weight        * y_rot_reward \
-        # -   z_rot_weight        * z_rot_reward
 
         forward = forward_weight    * forward_reward    
         lateral = lateral_weigth    * lateral_reward    * -1
@@ -1218,8 +1115,6 @@ if __name__ == '__main__':
         limits = limits_weight      * limits_reward     * -1
         fall = fall_weight          * fall_reward       * -1
         
-        # print(azp)
-        # print(fall)
 
         reward = 0 \
         + forward \
@@ -1248,13 +1143,9 @@ if __name__ == '__main__':
 
 
     def step_cb(msg):
-        # print("mydebug - step callback called!!!", flush=True)
+        global step_cb_enable
 
         global first
-
-        # global got_position
-        # global got_orientiation
-        # global got_joint_positions
         global got_state
 
         global actual_joint_positions
@@ -1264,13 +1155,6 @@ if __name__ == '__main__':
         global m2s
         global s2m
 
-        # global ori_x
-        # global ori_y
-        # global ori_z
-        # global pos_x
-        # global pos_y
-        # global pos_z
-
         global pos_shift_reg
         global ori_shift_reg
         global joint_positions_shift_reg
@@ -1278,125 +1162,79 @@ if __name__ == '__main__':
         global original_pos
         global original_ori
 
-        #wait until all the state variables are known
-        # while not got_position and not got_orientiation and not got_joint_positions:
-        while not got_state:
-            time.sleep(0.001)
-            # print("waiting for state, now it's ", got_state, flush=True)
-        
-        got_state = False
-        #setting default values for next cycle
-        # got_position = False
-        # got_orientiation = False
-        # got_joint_positions = False
+        global cold_start
 
-        #send signal to publish new positions
-        # actual_pos = [pos_x, pos_y, pos_z]
-        pos_shift_reg = shift_elements(pos_shift_reg, actual_pos, 18, 3) #TODO generalize
-        # actual_ori = [ori_x, ori_y, ori_z]
-        ori_shift_reg = shift_elements(ori_shift_reg, actual_ori, 18, 3) #TODO generalize
-        joint_positions_shift_reg = shift_elements(joint_positions_shift_reg, actual_joint_positions, 60, 20)
+        print("mydebug - step callback called", flush=True)
 
-        state = [*pos_shift_reg, *ori_shift_reg, *joint_positions_shift_reg]
 
-        #check if fallen
-        fallen = is_fallen(actual_pos)
+        if step_cb_enable: # if the data is correct
+            print("mydebug - enabled - step callback called!!!", flush=True)
 
-        if first:
-            if (actual_pos != [0,0,0]) and (actual_ori != [0,0,0]):
-                m2s.put(state)
-                first = 0
+            #wait until all the state variables are known
+            while not got_state:
+                time.sleep(0.001)
+                # print("waiting for state, now it's ", got_state, flush=True)
+            got_state = False
+
+            pos_shift_reg = shift_elements(pos_shift_reg, actual_pos, 18, 3) #TODO generalize
+            ori_shift_reg = shift_elements(ori_shift_reg, actual_ori, 18, 3) #TODO generalize
+            joint_positions_shift_reg = shift_elements(joint_positions_shift_reg, actual_joint_positions, 60, 20)
+
+            state = [*pos_shift_reg, *ori_shift_reg, *joint_positions_shift_reg]
+
+
+            #at this point we have the state!!!!!!!!
+            if cold_start:
+                cold_start = False
+
                 original_pos = actual_pos
                 original_ori = actual_ori
-            else:
-                print("Bad position and orientation initialization avoided!")
-                return
-        else:
-            m2s.put(state)
-            reward, reward_values = reward_function(actual_pos, actual_ori, actual_joint_positions)
-            m2s.put(reward)
-            q4.put(reward_values)
-            done = is_it_done(actual_pos)
-            m2s.put(done or fallen)
 
+                m2s.put(state)
+                action = s2m.get()
 
-        if(fallen):
-            # print(reward_values)
-            # time.sleep(3)
-            os.kill(p4.pid, signal.SIGALRM)
-            time.sleep(3)
+                mapped_action = action[0].tolist()
+                mapped_action = [x / 0.05 for x in mapped_action]
 
-            # while sim_state == 1:
-            #     time.sleep(0.001)
-                # print("waiting for restart")
-            # print("restarted!!!")
-            # print("starting the reset process", flush=True)
-
-            # stop_publisher.publish(Bool(True))
-            # time.sleep(1)
-            # sync_publisher.publish(Bool(True))
-            # time.sleep(1)
-            # start_publisher.publish(Bool(True))  #start simulation
-            # time.sleep(2)
-            delay = 0.3
-
-            stop_publisher.publish(Bool(True))
-            # print("stop", flush=True)
-            time.sleep(delay)
-
-            sync_publisher.publish(Bool(True))   #synchronize
-            # print("sync", flush=True)
-            time.sleep(delay)
-
-            start_publisher.publish(Bool(True))  #start simulation
-            # print("start sim", flush=True)
-            time.sleep(delay)
-
-            step_publisher.publish(Bool(True))   #next step
-            # print("trig next", flush=True)
-            time.sleep(delay)
-
-            # print("waiting before triggering next step", flush=True)
-            # time.sleep(2)
-            # print("waiting done")
-
-            # got_state = False
-            step_publisher.publish(Bool(True)) #trigger next step
-            time.sleep(1)
-            # print("finished the reset process\n\n", flush=True)
-            # time.sleep(5)
-            # print("check noww!!!!!!!")
+                action_packet = Float32MultiArray()
+                action_packet.data = mapped_action
             
-            # got_state = False
-            return
+                joint_publisher0.publish(action_packet)
+                step_publisher.publish(Bool(True))
+            
+                return
 
+            else:
+                m2s.put(state)
 
-        action = s2m.get(block=True)
-        # print(action)
+                reward, reward_values = reward_function(actual_pos, actual_ori, actual_joint_positions)
+                m2s.put(reward)
 
-        # mapped_action = list(map(map_to_discrete_range, action[0].tolist()))
+                achieved = is_it_done(actual_pos)
+                fallen = is_fallen(actual_pos)
+                done = fallen or achieved
+                m2s.put(done)
 
-        mapped_action = action[0].tolist()
-        mapped_action = [x / 0.05 for x in mapped_action]
+                action = s2m.get()
 
-        action_packet = Float32MultiArray()
-        action_packet.data = mapped_action
+            mapped_action = action[0].tolist()
+            mapped_action = [x / 0.05 for x in mapped_action]
 
-        # action_packet.data = [1] * 20
-    
-        joint_publisher0.publish(action_packet)
-
-        # print("waiting before triggering next step", flush=True)
-        # time.sleep(2)
-        # print("waiting done", flush=True)
-
-        step_publisher.publish(z)
-        # print("not fallen -> new step activated\n\n", flush=True)
-
-        # time.sleep(1)
+            action_packet = Float32MultiArray()
+            action_packet.data = mapped_action
         
-        return
+            joint_publisher0.publish(action_packet)
+            step_publisher.publish(Bool(True))
+            print("step publisher called", flush=True)
+            
+            return
+        else:
+            print("mydebug - disabled - step callback called!!!", flush=True)
+
+            return
     
+
+
 
 
 
@@ -1409,24 +1247,15 @@ if __name__ == '__main__':
     pause_flag = True
     sim_state = Float32MultiArray()
 
-    #TODO nem mindegy hol van
-    # position_cb_enable = True
-    # orientation_cb_enable = True
-    # joint_positions_cb_enable = True
-
-    # dummy_joint_control("something")
-
 
     mp.set_start_method('spawn')
-    # manager = mp.Manager()
     m2s = mp.Queue()
     s2m = mp.Queue()
 
-    p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m), daemon=True)
+    # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m), daemon=True)
+    p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid()), daemon=True)
     # p1 = Process(target=joint_control, args=(q1,))
     p1.start()
-
-    # time.sleep(3) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 
     # q2 = Queue()
     # p2 = Process(target=process_image, args=(q2,))
@@ -1436,12 +1265,12 @@ if __name__ == '__main__':
     # p3 = Process(target=graph_state, args=[])
     # p3.start()
 
-    q4 = Queue()
-    p4 = Process(target=graph_current_reward, args=[q4,])
-    p4.start()
+    # q4 = Queue()
+    # p4 = Process(target=graph_current_reward, args=[q4,])
+    # p4.start()
 
-    p5 = Process(target=graph_windowed_reward, args=[q4,])
-    p5.start()
+    # p5 = Process(target=graph_windowed_reward, args=[q4,])
+    # p5.start()
     
     rospy.init_node('hugo_main')
     q_size = 1
@@ -1463,23 +1292,30 @@ if __name__ == '__main__':
     
     time.sleep(0.1) #original value 5
     
+    # z = Bool(True)
+
+    # delay = 0.3
+
+    # sync_publisher.publish(z)   #synchronize
+    # print("sync", flush=True)
+    # time.sleep(delay)
+
+    # start_publisher.publish(z)  #start simulation
+    # print("start sim", flush=True)
+    # time.sleep(delay)
+
+    # step_publisher.publish(z)   #next step
+    # print("trig next1", flush=True)
+    # time.sleep(delay)
+
+    # step_cb_enable = True
+    # print("step cb enable by main", flush=True)
+
+    # step_publisher.publish(z) #needed because the simulator doesnt publish the states with only one step
+    # print("trig next2", flush=True)
+    # time.sleep(delay)
     
-    # print("mydebug - simulation started by main")
-    z = Bool(True)
-
-    delay = 0.3
-
-    sync_publisher.publish(z)   #synchronize
-    print("sync", flush=True)
-    time.sleep(delay)
-    start_publisher.publish(z)  #start simulation
-    print("start sim", flush=True)
-    time.sleep(delay)
-    step_publisher.publish(z)   #next step
-    print("trig next", flush=True)
-    time.sleep(delay)
-    step_publisher.publish(z) #needed because the simulator doesnt publish the states with only one step
-    print("trig next", flush=True)
+    
     # time.sleep(delay)
     
     
@@ -1493,11 +1329,9 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, sigint_handler)
     signal.signal(signal.SIGQUIT, sigquit_handler)
+    signal.signal(signal.SIGALRM, sigalrm_handler)
 
     # signal.signal(signal.SIGSTOP, sigstop_handler) #TODO
-
-
-
 
     # time.sleep(2) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
