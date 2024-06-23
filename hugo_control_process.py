@@ -88,7 +88,7 @@ def joint_control_ddpg(m2s, s2m, pid):
             self.action_space = torch.tensor(26 * [0])
 
         def reset(self):
-            print("reset called")
+            # print("reset called")
             os.kill(pid, signal.SIGALRM)
             state = m2s.get()
             return state
@@ -925,38 +925,42 @@ if __name__ == '__main__':
     def sigalrm_handler(*args):
         global step_cb_enable
         global cold_start
+        global first
 
         cold_start = True
-        print("sigalarm received in main form subprocess", flush = True)
+        # print("sigalarm received in main form subprocess", flush = True)
         z = Bool(True)
 
-        delay = 1
+        delay = 0.3
 
         step_cb_enable = False
 
         sync_publisher.publish(z)   #synchronize
-        print("sync publisher called", flush=True)
+        # print("sync publisher called", flush=True)
         time.sleep(delay)
 
         stop_publisher.publish(z)  #stop simulation
-        print("stop publisher called", flush=True)
+        # print("stop publisher called", flush=True)
         time.sleep(delay)
 
         start_publisher.publish(z)  #start simulation
-        print("start publisher called", flush=True)
+        # print("start publisher called", flush=True)
         time.sleep(delay)
 
         step_publisher.publish(z)   #next step
-        print("trig ", flush=True)
+        # print("trig ", flush=True)
         time.sleep(delay)
 
         step_cb_enable = True
 
         step_publisher.publish(z) #needed because the simulator doesnt publish the states with only one step
-        print("trig next2", flush=True)
+        # print("trig next2", flush=True)
         time.sleep(delay)
 
-        print("sigalarm handling ended", flush = True)
+        # print("sigalarm handling ended\n", flush = True)
+
+        return
+        # step_cb("alma")
 
 
 
@@ -1076,7 +1080,7 @@ if __name__ == '__main__':
         azo = actual_ori[2]
 
 
-        forward_weight = 30
+        forward_weight = 50
         lateral_weigth = 3
         vertical_weigth = 2
         x_rot_weight = 1.5
@@ -1164,11 +1168,11 @@ if __name__ == '__main__':
 
         global cold_start
 
-        print("mydebug - step callback called", flush=True)
+        # print("mydebug - step callback called", flush=True)
 
 
         if step_cb_enable: # if the data is correct
-            print("mydebug - enabled - step callback called!!!", flush=True)
+            # print("mydebug - enabled - step callback called!!!", flush=True)
 
             #wait until all the state variables are known
             while not got_state:
@@ -1214,6 +1218,8 @@ if __name__ == '__main__':
                 fallen = is_fallen(actual_pos)
                 done = fallen or achieved
                 m2s.put(done)
+                if done:
+                    return
 
                 action = s2m.get()
 
@@ -1225,11 +1231,11 @@ if __name__ == '__main__':
         
             joint_publisher0.publish(action_packet)
             step_publisher.publish(Bool(True))
-            print("step publisher called", flush=True)
+            # print("step publisher called\n", flush=True)
             
             return
         else:
-            print("mydebug - disabled - step callback called!!!", flush=True)
+            # print("mydebug - disabled - step callback called!!!", flush=True)
 
             return
     
