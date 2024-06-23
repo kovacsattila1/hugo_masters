@@ -76,11 +76,6 @@ step_cb_enable = False
 
 def joint_control_ddpg(m2s, s2m, pid):
 
-    # time.sleep(3)
-    # os.kill(pid, signal.SIGALRM)
-    # m2s.get()
-    # time.sleep(3)
-
     class Coppelia:
         def __init__(self):
             rospy.init_node('hugo_vision')
@@ -92,6 +87,7 @@ def joint_control_ddpg(m2s, s2m, pid):
             os.kill(pid, signal.SIGALRM)
             state = m2s.get()
             return state
+        
 
     env = Coppelia()
 
@@ -99,12 +95,12 @@ def joint_control_ddpg(m2s, s2m, pid):
                     input_dims=env.observation_space.shape, tau=0.001,
                     batch_size=64, fc1_dims=400, fc2_dims=300, 
                     n_actions=env.action_space.shape[0])
-    n_games = 1000
+    n_games = 5000
     filename = 'LunarLander_alpha_' + str(agent.alpha) + '_beta_' + \
                 str(agent.beta) + '_' + str(n_games) + '_games'
     figure_file = 'plots/' + filename + '.png'
 
-    best_score = 5
+    best_score = -30
     score_history = []
 
 
@@ -119,18 +115,11 @@ def joint_control_ddpg(m2s, s2m, pid):
         while not done:
             action = agent.choose_action(observation)
             s2m.put([torch.tensor(action)])
-            # print("action put!!!")
 
-            # observation_, reward, done, info = env.step(action)
             observation_ = m2s.get()
             reward = m2s.get()
             done = m2s.get()
 
-            # print("\nobservation\n", observation, flush=True)
-            # print("\nreward\n", reward, flush=True)
-            # print("\ndone\n", done, flush=True)
-
-            # time.sleep(3)
 
             agent.remember(observation, action, reward, observation_, done)
             agent.learn()
@@ -152,217 +141,6 @@ def joint_control_ddpg(m2s, s2m, pid):
     plot_learning_curve(x, score_history, figure_file)
 
 
-#------------------------------------------------------------------------------------------------------------
-
-
-#------------------------------------------------------------------------------------------------------------
-
-def joint_control(m2s, s2m, pid):
-    print("torch process started!!!", flush=True)
-    # rospy.init_node('hugo_control')
-    # q_size = 10
-    # rospy.Subscriber("/simulationStepDone", Bool, step_cb, queue_size = q_size)#, latch=True)
-
-
-    writer = SummaryWriter('runs/run_1')
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # device = torch.device("cpu")
-
-
-    logger.info("Using {}".format(device))
-    checkpoint_dir = '.'
-    seed = 42
-
-    torch.manual_seed(seed)
-
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
-
-    gamma = 0.99
-    tau = default=0.001
-    hidden_size = [400, 300]
-    observation_space_dim = 96
-    action_space_dim = 26
-    replay_size = 1e6
-    noise_stddev = 0.2
-    load_model = False
-    timesteps = 1e6
-    n_test_cycles = 10
-    batch_size = 1
-    done = 0
-    reward_threshold = 5
-
-    agent = DDPG(gamma,
-                tau,
-                hidden_size,
-                observation_space_dim,
-                action_space_dim,
-                checkpoint_dir=checkpoint_dir
-                )
-    memory = ReplayMemory(int(replay_size))
-
-    nb_actions = action_space_dim
-    ou_noise = OrnsteinUhlenbeckActionNoise(mu=np.zeros(nb_actions),
-                                            sigma=float(noise_stddev) * np.ones(nb_actions))
-
-
-
-
-    # Define counters and other variables
-    start_step = 0
-    # timestep = start_step
-    if load_model:
-        # Load agent if necessary
-        start_step, memory = agent.load_checkpoint()
-    timestep = start_step // 10000 + 1
-    rewards, policy_losses, value_losses, mean_test_rewards = [], [], [], []
-    epoch = 0
-    t = 0
-    time_last_checkpoint = time.time()
-
-    # Start training
-    # logger.info('Train agent on {} env'.format({env.unwrapped.spec.id}))
-    logger.info('Doing {} timesteps'.format(timesteps))
-    logger.info('Start at timestep {0} with t = {1}'.format(timestep, t))
-    logger.info('Start training at {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
-
-
-
-
-    while timestep <= timesteps:
-        ou_noise.reset()
-        epoch_return = 0
-
-
-        #get state first
-        #reset the simulator
-        #take a step
-        # initial_state = 
-
-        #TODO
-        #signal that it's first step
-        # print("entering waiting", flush=True)
-        # print(list(q.queue))
-        mystate = m2s.get()
-        # print("waiting ended", flush=True)
-        state = torch.Tensor(mystate).to(device)
-        state = state.unsqueeze(0)
-
-        while True:
-            # if args.render_train:
-            #     env.render()
-            state.squeeze()
-            # print(state)
-            action = agent.calc_action(state, ou_noise)
-
-            s2m.put(action)
-
-            #get next state
-            #get reward
-            #get done
-            # next_state, reward, done, _ = env.step(action.cpu().numpy()[0]) 
-            next_state = m2s.get()
-            reward = m2s.get()
-            done = m2s.get()
-
-            timestep += 1
-            epoch_return += reward
-
-            mask = torch.Tensor([done]).to(device)
-            reward = torch.Tensor([reward]).to(device)
-            next_state = torch.Tensor([next_state]).to(device)
-
-            memory.push(state, action, mask, next_state, reward)
-
-            state = next_state
-
-            epoch_value_loss = 0
-            epoch_policy_loss = 0
-
-            if len(memory) > batch_size:
-                transitions = memory.sample(batch_size)
-                # Transpose the batch
-                # (see http://stackoverflow.com/a/19343/3343043 for detailed explanation).
-                batch = Transition(*zip(*transitions))
-
-                # Update actor and critic according to the batch
-                value_loss, policy_loss = agent.update_params(batch)
-
-                epoch_value_loss += value_loss
-                epoch_policy_loss += policy_loss
-
-            if done:
-                break
-
-        rewards.append(epoch_return)
-        value_losses.append(epoch_value_loss)
-        policy_losses.append(epoch_policy_loss)
-        writer.add_scalar('epoch/return', epoch_return, epoch)
-
-        # Test every 10th episode (== 1e4) steps for a number of test_epochs epochs
-        if timestep >= 10000 * t:
-            t += 1
-            test_rewards = []
-            for _ in range(n_test_cycles):
-                #get state first
-                #reset the simulator
-                #take a step
-                #initial_state = 
-                # state = torch.Tensor([env.reset()]).to(device)
-                test_reward = 0
-                while True:
-                    # if args.render_eval:
-                    #     env.render()
-
-                    action = agent.calc_action(state)  # Selection without noise
-
-                    #TODO
-                    # next_state, reward, done, _ = env.step(action.cpu().numpy()[0])
-                    test_reward += reward
-
-                    next_state = torch.Tensor(next_state).to(device)
-
-                    state = next_state
-                    if done:
-                        break
-                test_rewards.append(test_reward)
-
-            mean_test_rewards.append(np.mean(test_rewards))
-
-            for name, param in agent.actor.named_parameters():
-                writer.add_histogram(name, param.clone().cpu().data.numpy(), epoch)
-            for name, param in agent.critic.named_parameters():
-                writer.add_histogram(name, param.clone().cpu().data.numpy(), epoch)
-
-            writer.add_scalar('test/mean_test_return', mean_test_rewards[-1], epoch)
-            logger.info("Epoch: {}, current timestep: {}, last reward: {}, "
-                        "mean reward: {}, mean test reward {}".format(epoch,
-                                                                        timestep,
-                                                                        rewards[-1],
-                                                                        np.mean(rewards[-10:]),
-                                                                        np.mean(test_rewards)))
-
-            # Save if the mean of the last three averaged rewards while testing
-            # is greater than the specified reward threshold
-            # TODO: Option if no reward threshold is given
-            if np.mean(mean_test_rewards[-3:]) >= reward_threshold:
-                # agent.save_checkpoint(timestep, memory)
-                time_last_checkpoint = time.time()
-                # logger.info('Saved model at {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
-
-        epoch += 1
-
-    # agent.save_checkpoint(timestep, memory)
-    logger.info('Saved model at endtime {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
-    logger.info('Stopping training at {}'.format(time.strftime('%a, %d %b %Y %H:%M:%S GMT', time.localtime())))
-    
-    #TODO 
-    # close the simulator session
-    # env.close()
 
 #------------------------------------------------------------------------------------------------------------
 
@@ -908,14 +686,19 @@ if __name__ == '__main__':
     def sigint_handler(*args):
         print("\n exiting!!!", flush=True)
         stop_publisher.publish(Bool(True))
-        p1.kill()
-        p2.kill()
-        p1.join()
-        p2.join()
-        p3.kill()
-        p3.join()
-        p4.kill()
-        p4.join()
+
+        for p in processes:
+            p.kill()
+            p.join()
+
+        # p1.kill()
+        # p2.kill()
+        # p1.join()
+        # p2.join()
+        # p3.kill()
+        # p3.join()
+        # p4.kill()
+        # p4.join()
         print("Processes should be joined by now", flush=True)
         exit(0)
 
@@ -926,6 +709,8 @@ if __name__ == '__main__':
         global step_cb_enable
         global cold_start
         global first
+
+        # os.kill(os.getpid(p4), signal.SIGALRM)
 
         cold_start = True
         # print("sigalarm received in main form subprocess", flush = True)
@@ -1212,6 +997,7 @@ if __name__ == '__main__':
                 m2s.put(state)
 
                 reward, reward_values = reward_function(actual_pos, actual_ori, actual_joint_positions)
+                # q4.put(reward_values)
                 m2s.put(reward)
 
                 achieved = is_it_done(actual_pos)
@@ -1253,6 +1039,7 @@ if __name__ == '__main__':
     pause_flag = True
     sim_state = Float32MultiArray()
 
+    processes = []
 
     mp.set_start_method('spawn')
     m2s = mp.Queue()
@@ -1260,22 +1047,29 @@ if __name__ == '__main__':
 
     # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m), daemon=True)
     p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid()), daemon=True)
+    processes.append(p1)
     # p1 = Process(target=joint_control, args=(q1,))
     p1.start()
 
+
+
     # q2 = Queue()
     # p2 = Process(target=process_image, args=(q2,))
+    #processes.append(p2)
     # p2.start()
 
     # q3 = Queue()
     # p3 = Process(target=graph_state, args=[])
+    # processes.append(p3)
     # p3.start()
 
     # q4 = Queue()
     # p4 = Process(target=graph_current_reward, args=[q4,])
+    # processes.append(p4)
     # p4.start()
 
     # p5 = Process(target=graph_windowed_reward, args=[q4,])
+    # processes.append(p5)
     # p5.start()
     
     rospy.init_node('hugo_main')
@@ -1294,36 +1088,7 @@ if __name__ == '__main__':
     rospy.Subscriber("/state", Float32MultiArray, state_cb, queue_size = q_size)
     rospy.Subscriber("/simulationStepDone", Bool, step_cb, queue_size = q_size)#, latch=True)
     
-
-    
     time.sleep(0.1) #original value 5
-    
-    # z = Bool(True)
-
-    # delay = 0.3
-
-    # sync_publisher.publish(z)   #synchronize
-    # print("sync", flush=True)
-    # time.sleep(delay)
-
-    # start_publisher.publish(z)  #start simulation
-    # print("start sim", flush=True)
-    # time.sleep(delay)
-
-    # step_publisher.publish(z)   #next step
-    # print("trig next1", flush=True)
-    # time.sleep(delay)
-
-    # step_cb_enable = True
-    # print("step cb enable by main", flush=True)
-
-    # step_publisher.publish(z) #needed because the simulator doesnt publish the states with only one step
-    # print("trig next2", flush=True)
-    # time.sleep(delay)
-    
-    
-    # time.sleep(delay)
-    
     
     rate = rospy.Rate(10)
 
@@ -1350,36 +1115,6 @@ if __name__ == '__main__':
     rate = rospy.Rate(10)
 
     while not rospy.is_shutdown():
-        # print("main running")
-        # print(counter)
-
-        #watchdog mechanism
-        # if got_simstate:
-        #     current_state = sim_state.data
-        #     if (current_state == 0) and (prev_state == 0): #ha nem futott es nem is fut
-        #         # print("first")
-        #         counter += 1
-        #         # print("counter in first = ", counter)
-        #     elif (current_state == 1) and (prev_state == 0): #ha nem futott de most fut
-        #         # print("second")
-        #         counter = 0
-        #         # print("counter in second = ", counter)
-
-        #     if counter >= 40: #ha leallt
-        #         # pass
-        #         print("main restarts simulation!!!!!!")
-        #         sync_publisher.publish(Bool(True))
-        #         time.sleep(1)
-        #         start_publisher.publish(Bool(True))  #start simulation
-        #         time.sleep(1)
-        #         step_publisher.publish(Bool(True)) #trigger next step
-        #         time.sleep(1)
-        #         counter = 0
-
-        #     prev_state = current_state
-        # else:
-        #     print("No simstate yet!!")
-
 
         rate.sleep()
 
