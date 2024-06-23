@@ -1122,27 +1122,24 @@ def main_process():
 
 if __name__ == '__main__':
 
+    def sigint_handler(*args):
+        print("you pressed ctrl+c")
+        for process, filename in processes:
+            os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+            # os.kill(process.pid, signal.SIGTERM)
+            # print("pid", process.pid)
+            # process.kill()
+            
+            # process.terminate()  # Terminate the process
+            process.wait()       # Wait for the process to terminate
+            if process.returncode is not None:
+                print(f"Process writing to {filename} terminated with return code {process.returncode}")
 
-    # coppelia_sim_path = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh"  # Adjust this path based on your OS and installation
+        print("All processes have been terminated.")
+        exit()
 
-    # arguments = [
-    #     # "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh",
-    #     "-h",
-    #     "-gparam1=0",
-    #     "-GzmqRemoteApi.rpcPort=23000",
-    #     "-GwsRemoteApi.port=23050",
-    #     "-GROSInterface.nodeName=MyNodeName0",
-    #     "/home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
-    # ]
 
-    # Start the process and redirect stdout to the file
-    # process = subprocess.Popen(command, shell=True, stdout=outfile, stderr=outfile)
-
-    # print([arguments[0]] + arguments[1:])
-    # process = subprocess.Popen([arguments[0]] + arguments[1:]), stdout=outfile, stderr=outfile)
-    # process = subprocess.Popen([coppelia_sim_path] + arguments)
-
-    # process.wait()
+    signal.signal(signal.SIGINT, sigint_handler)
 
     num_instances = 1
 
@@ -1164,43 +1161,12 @@ if __name__ == '__main__':
         with open(f"output_{i+1}.txt", "w") as outfile:
 
             arguments = command.split()
-            # coppelia_sim_path = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh"  # Adjust this path based on your OS and installation
-
-            # arguments = [
-            #     # "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh",
-            #     "-h",
-            #     "-gparam1=0",
-            #     "-GzmqRemoteApi.rpcPort=23000",
-            #     "-GwsRemoteApi.port=23050",
-            #     "-GROSInterface.nodeName=MyNodeName0",
-            #     "/home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
-            # ]
-
-            # Start the process and redirect stdout to the file
-            # process = subprocess.Popen(command, shell=True, stdout=outfile, stderr=outfile)
-
-            # print([arguments[0]] + arguments[1:])
+  
             process = subprocess.Popen([arguments[0]] + arguments[1:], shell=False, stdout=outfile, stderr=outfile, preexec_fn=os.setsid)
-            # process = subprocess.Popen([coppelia_sim_path] + arguments)
             processes.append((process, f"output_{i+1}.txt"))
 
-
-    time.sleep(15)
-
-
-    for process, filename in processes:
-        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-        # os.kill(process.pid, signal.SIGTERM)
-        # print("pid", process.pid)
-        # process.kill()
-        
-        # process.terminate()  # Terminate the process
-        process.wait()       # Wait for the process to terminate
-        if process.returncode is not None:
-            print(f"Process writing to {filename} terminated with return code {process.returncode}")
-
-    print("All processes have been terminated.")
-
+    while True:
+        time.sleep(1)
 
     # # Wait for all processes to complete and check for errors
     # for process, filename in processes:
