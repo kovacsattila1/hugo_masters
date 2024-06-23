@@ -3,8 +3,8 @@
 import torch.multiprocessing.queue
 import rospy
 from sensor_msgs.msg import Image # ROS Image message -> OpenCV2 image converter
-from cv_bridge import CvBridge, CvBridgeError # OpenCV2 for saving an image
-import cv2
+# from cv_bridge import CvBridge, CvBridgeError # OpenCV2 for saving an image
+# import cv2
 import math
 from std_msgs.msg import Float32
 from std_msgs.msg import Float32MultiArray
@@ -31,6 +31,7 @@ import os
 from functools import partial
 from DDPG.ddpg_torch import Agent
 from DDPG.utils import plot_learning_curve
+import subprocess
 
 
 cold_start = False
@@ -49,7 +50,7 @@ logger = logging.getLogger('train')
 logger.setLevel(logging.DEBUG)
 
 # Instantiate CvBridge
-bridge = CvBridge()
+# bridge = CvBridge()
 
 
 got_position = False
@@ -144,22 +145,22 @@ def joint_control_ddpg(m2s, s2m, pid):
 
 #------------------------------------------------------------------------------------------------------------
 
-def process_image(q):
+# def process_image(q):
 
-    def image_cb(msg):
-        #print("Received an image!")
-        try:
-            # Convert your ROS Image message to OpenCV2
-            cv2_img = bridge.imgmsg_to_cv2(msg, "bgr8")
-            cv2_img = cv2.flip(cv2_img, 0)
-        except CvBridgeError as e:
-            print(e)
-        else:
-            # Save your OpenCV2 image as a jpeg 
-            #cv2.imwrite('camera_image.jpeg', cv2_img)
-            cv2.namedWindow("Input")
-            cv2.imshow("Input", cv2_img)
-            cv2.waitKey(1)
+#     def image_cb(msg):
+#         #print("Received an image!")
+#         try:
+#             # Convert your ROS Image message to OpenCV2
+#             cv2_img = bridge.imgmsg_to_cv2(msg, "bgr8")
+#             cv2_img = cv2.flip(cv2_img, 0)
+#         except CvBridgeError as e:
+#             print(e)
+#         else:
+#             # Save your OpenCV2 image as a jpeg 
+#             #cv2.imwrite('camera_image.jpeg', cv2_img)
+#             cv2.namedWindow("Input")
+#             cv2.imshow("Input", cv2_img)
+#             cv2.waitKey(1)
 
 
     rospy.init_node('hugo_vision')
@@ -637,8 +638,7 @@ def graph_current_reward(q):
 #------------------------------------------------------------------------------------------------------------
 
 
-if __name__ == '__main__':
-
+def main_process():
 
     first = 1
 
@@ -1118,4 +1118,92 @@ if __name__ == '__main__':
 
         rate.sleep()
 
-    
+# import subprocess
+
+if __name__ == '__main__':
+
+
+    # coppelia_sim_path = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh"  # Adjust this path based on your OS and installation
+
+    # arguments = [
+    #     # "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh",
+    #     "-h",
+    #     "-gparam1=0",
+    #     "-GzmqRemoteApi.rpcPort=23000",
+    #     "-GwsRemoteApi.port=23050",
+    #     "-GROSInterface.nodeName=MyNodeName0",
+    #     "/home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
+    # ]
+
+    # Start the process and redirect stdout to the file
+    # process = subprocess.Popen(command, shell=True, stdout=outfile, stderr=outfile)
+
+    # print([arguments[0]] + arguments[1:])
+    # process = subprocess.Popen([arguments[0]] + arguments[1:]), stdout=outfile, stderr=outfile)
+    # process = subprocess.Popen([coppelia_sim_path] + arguments)
+
+    # process.wait()
+
+    num_instances = 1
+
+    bash_commands = []
+    for i in range(num_instances):
+        command = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh -h -gparam1=" + str(i) + " -GzmqRemoteApi.rpcPort=" + str(23000 + 2*i) + " -GwsRemoteApi.port=" + str(23050 + 2*i) + " -GROSInterface.nodeName=MyNodeName" + str(i) + " /home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
+        bash_commands.append(command)
+
+    for command in bash_commands:
+        print(command)
+
+
+    # List to hold process objects
+    processes = []
+
+    # Loop through the commands and start each process
+    for i, command in enumerate(bash_commands):
+        # Open a file for each process's output
+        with open(f"output_{i+1}.txt", "w") as outfile:
+
+            arguments = command.split()
+            # coppelia_sim_path = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh"  # Adjust this path based on your OS and installation
+
+            # arguments = [
+            #     # "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh",
+            #     "-h",
+            #     "-gparam1=0",
+            #     "-GzmqRemoteApi.rpcPort=23000",
+            #     "-GwsRemoteApi.port=23050",
+            #     "-GROSInterface.nodeName=MyNodeName0",
+            #     "/home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
+            # ]
+
+            # Start the process and redirect stdout to the file
+            # process = subprocess.Popen(command, shell=True, stdout=outfile, stderr=outfile)
+
+            # print([arguments[0]] + arguments[1:])
+            process = subprocess.Popen([arguments[0]] + arguments[1:], shell=False, stdout=outfile, stderr=outfile, preexec_fn=os.setsid)
+            # process = subprocess.Popen([coppelia_sim_path] + arguments)
+            processes.append((process, f"output_{i+1}.txt"))
+
+
+    time.sleep(15)
+
+
+    for process, filename in processes:
+        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+        # os.kill(process.pid, signal.SIGTERM)
+        # print("pid", process.pid)
+        # process.kill()
+        
+        # process.terminate()  # Terminate the process
+        process.wait()       # Wait for the process to terminate
+        if process.returncode is not None:
+            print(f"Process writing to {filename} terminated with return code {process.returncode}")
+
+    print("All processes have been terminated.")
+
+
+    # # Wait for all processes to complete and check for errors
+    # for process, filename in processes:
+    #     process.wait()  # Wait for the process to complete
+    #     if process.returncode != 0:
+    #         print(f"Command failed for {filename} with return code {process.returncode}")
