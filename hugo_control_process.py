@@ -29,8 +29,12 @@ from torch.utils.tensorboard import SummaryWriter
 import torch.multiprocessing as mp
 import os
 from functools import partial
-from DDPG.ddpg_torch import Agent
-from DDPG.utils import plot_learning_curve
+from DDPG.ddpg_torch import Agent as Agent_ddpg
+from DDPG.utils import plot_learning_curve as plc_ddpg
+
+from TD3.td3_torch import Agent as Agent_td3
+from TD3.utils import plot_learning_curve as plc_td3
+
 import subprocess
 # import multiprocessing
 import sys
@@ -104,11 +108,12 @@ step_cb_enable = False
 #         rate.sleep()
 
 
+
 #------------------------------------------------------------------------------------------------------------
 
 
 
-def joint_control_ddpg(m2s, s2m, pid, file_path, id):
+def joint_control_td3(m2s, s2m, pid, file_path, id):
 
     with open(file_path, 'w') as f:
         sys.stdout = f
@@ -128,16 +133,23 @@ def joint_control_ddpg(m2s, s2m, pid, file_path, id):
 
         env = Coppelia()
 
-        agent = Agent(id, alpha=0.0001, beta=0.001, 
+        agent = Agent_td3(id, alpha=0.0001, beta=0.001, 
                         input_dims=env.observation_space.shape, tau=0.001,
-                        batch_size=64, fc1_dims=400, fc2_dims=300, 
+                        batch_size=64, fc1_dims=800, fc2_dims=600, 
                         n_actions=env.action_space.shape[0])
-        n_games = 150
-        filename = 'Coppelia' + 'ddpg' + str(agent.alpha) + '_beta_' + \
-                    str(agent.beta) + '_' + str(n_games) + '_games'
-        figure_file = 'plots/' + filename + str(id) + '.png'
+        n_games = 1000
+        filename = "" \
+            + 'Coppelia' + '_' \
+            + 'td3' + '_' \
+            + 'alpha' + str(agent.alpha) + '_' \
+            + 'beta' +  str(agent.beta) + '_' \
+            + 'games' + str(n_games) + '_' \
+            + 'fc1_' + str(agent.fc1_dims) + '_' \
+            + 'fc2_' + str(agent.fc2_dims)
+        
+        figure_file = 'plots/' + filename + '_' + str(id) + '.png'
 
-        best_score = -150
+        best_score = -30
         score_history = []
 
 
@@ -175,7 +187,89 @@ def joint_control_ddpg(m2s, s2m, pid, file_path, id):
             print('episode ', i, 'score %.1f' % score,
                     'average score %.1f' % avg_score, flush=True)
         x = [i+1 for i in range(n_games)]
-        plot_learning_curve(x, score_history, figure_file)
+        plc_td3(x, score_history, figure_file)
+
+
+
+#------------------------------------------------------------------------------------------------------------
+
+
+
+def joint_control_ddpg(m2s, s2m, pid, file_path, id):
+
+    with open(file_path, 'w') as f:
+        sys.stdout = f
+
+        class Coppelia:
+            def __init__(self):
+                # rospy.init_node('hugo_vision' + str(id))
+                self.observation_space  = torch.tensor(96*[0])
+                self.action_space = torch.tensor(26 * [0])
+
+            def reset(self):
+                # print("reset called")
+                os.kill(pid, signal.SIGALRM)
+                state = m2s.get()
+                return state
+            
+
+        env = Coppelia()
+
+        agent = Agent_ddpg(id, alpha=0.0001, beta=0.001, 
+                        input_dims=env.observation_space.shape, tau=0.001,
+                        batch_size=64, fc1_dims=800, fc2_dims=600, 
+                        n_actions=env.action_space.shape[0])
+        n_games = 3000
+        filename = "" \
+            + 'Coppelia' + '_' \
+            + 'ddpg' + '_' \
+            + 'alpha' + str(agent.alpha) + '_' \
+            + 'beta' +  str(agent.beta) + '_' \
+            + 'games' + str(n_games) + '_' \
+            + 'fc1_' + str(agent.fc1_dims) + '_' \
+            + 'fc2_' + str(agent.fc2_dims)
+        
+        figure_file = 'plots/' + filename + '_' + str(id) + '.png'
+
+        best_score = -30
+        score_history = []
+
+
+
+
+        for i in range(n_games):
+            observation = env.reset()
+
+            done = False
+            score = 0
+            agent.noise.reset()
+            while not done:
+                action = agent.choose_action(observation)
+                s2m.put([torch.tensor(action)])
+
+                observation_ = m2s.get()
+                reward = m2s.get()
+                done = m2s.get()
+
+
+                agent.remember(observation, action, reward, observation_, done)
+                agent.learn()
+                score += reward
+                observation = observation_
+
+
+
+            score_history.append(score)
+            avg_score = np.mean(score_history[-100:])
+
+            if avg_score > best_score:
+                best_score = avg_score
+                agent.save_models()
+
+            print('episode ', i, 'score %.1f' % score,
+                    'average score %.1f' % avg_score, flush=True)
+        x = [i+1 for i in range(n_games)]
+        plc_ddpg(x, score_history, figure_file)
 
 
 
@@ -1149,8 +1243,6 @@ if __name__ == '__main__':
 
     bash_commands = []
     for i in range(num_instances):
-        port_mult = 2
-        # command = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh -h -gparam1=" + str(i) + " -GzmqRemoteApi.rpcPort=" + str(23000 + port_mult*i) + " -GwsRemoteApi.port=" + str(23050 + port_mult*i) + " -GROSInterface.nodeName=MyNodeName" + str(i) + " /home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
         command = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh -h -gparam1=" + str(i) + " -GROSInterface.nodeName=MyNodeName" + str(i) + " /home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
         bash_commands.append(command)
 

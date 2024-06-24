@@ -15,7 +15,7 @@ class CriticNetwork(nn.Module):
         self.n_actions = n_actions
         self.name = name
         self.checkpoint_dir = chkpt_dir
-        self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_ddpg' + str(id))
+        self.checkpoint_file = os.path.join(self.checkpoint_dir, name + '_ddpg' + '_fc1' + str(self.fc1_dims) + '_fc2' + str(self.fc2_dims) + '_' +str(id))
 
         self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
@@ -89,7 +89,7 @@ class ActorNetwork(nn.Module):
         self.n_actions = n_actions
         self.name = name
         self.checkpoint_dir = chkpt_dir
-        self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_ddpg' + str(id))
+        self.checkpoint_file = os.path.join(self.checkpoint_dir, name + '_ddpg' + '_fc1' + str(self.fc1_dims) + '_fc2' + str(self.fc2_dims) + '_' +str(id))
 
         self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)

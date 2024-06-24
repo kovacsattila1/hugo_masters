@@ -16,6 +16,8 @@ class Agent():
         self.alpha = alpha
         self.beta = beta
         self.id = id
+        self.fc1_dims = fc1_dims
+        self.fc2_dims = fc2_dims
 
         self.memory = ReplayBuffer(max_size, input_dims, n_actions)
 
