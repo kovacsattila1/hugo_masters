@@ -7,7 +7,7 @@ from .noise import OUActionNoise
 from .buffer import ReplayBuffer
 
 class Agent():
-    def __init__(self, alpha, beta, input_dims, tau, n_actions, gamma=0.99,
+    def __init__(self, id, alpha, beta, input_dims, tau, n_actions, gamma=0.99,
                  max_size=1000000, fc1_dims=400, fc2_dims=300, 
                  batch_size=64):
         self.gamma = gamma
@@ -15,20 +15,21 @@ class Agent():
         self.batch_size = batch_size
         self.alpha = alpha
         self.beta = beta
+        self.id = id
 
         self.memory = ReplayBuffer(max_size, input_dims, n_actions)
 
         self.noise = OUActionNoise(mu=np.zeros(n_actions))
 
-        self.actor = ActorNetwork(alpha, input_dims, fc1_dims, fc2_dims,
+        self.actor = ActorNetwork(id, alpha, input_dims, fc1_dims, fc2_dims,
                                 n_actions=n_actions, name='actor')
-        self.critic = CriticNetwork(beta, input_dims, fc1_dims, fc2_dims,
+        self.critic = CriticNetwork(id, beta, input_dims, fc1_dims, fc2_dims,
                                 n_actions=n_actions, name='critic')
 
-        self.target_actor = ActorNetwork(alpha, input_dims, fc1_dims, fc2_dims,
+        self.target_actor = ActorNetwork(id, alpha, input_dims, fc1_dims, fc2_dims,
                                 n_actions=n_actions, name='target_actor')
 
-        self.target_critic = CriticNetwork(beta, input_dims, fc1_dims, fc2_dims,
+        self.target_critic = CriticNetwork(id, beta, input_dims, fc1_dims, fc2_dims,
                                 n_actions=n_actions, name='target_critic')
 
         self.update_network_parameters(tau=1)
