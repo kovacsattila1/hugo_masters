@@ -72,6 +72,7 @@ class CriticNetwork(nn.Module):
 
     def load_checkpoint(self):
         print('... loading checkpoint ...')
+        print(self.checkpoint_file, flush=True)
         self.load_state_dict(T.load(self.checkpoint_file))
 
     def save_best(self):
@@ -136,6 +137,7 @@ class ActorNetwork(nn.Module):
 
     def load_checkpoint(self):
         print('... loading checkpoint ...')
+        print(self.checkpoint_file, flush=True)
         self.load_state_dict(T.load(self.checkpoint_file))
 
     def save_best(self):

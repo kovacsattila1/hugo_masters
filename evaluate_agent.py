@@ -194,6 +194,10 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
 
 
 
+
+
+
+
 def joint_control_ddpg(m2s, s2m, pid, file_path, id):
 
     with open(file_path, 'w') as f:
@@ -218,20 +222,23 @@ def joint_control_ddpg(m2s, s2m, pid, file_path, id):
                         input_dims=env.observation_space.shape, tau=0.001,
                         batch_size=64, fc1_dims=800, fc2_dims=600, 
                         n_actions=env.action_space.shape[0])
-        n_games = 3000
-        filename = "" \
-            + 'Coppelia' + '_' \
-            + 'ddpg' + '_' \
-            + 'alpha' + str(agent.alpha) + '_' \
-            + 'beta' +  str(agent.beta) + '_' \
-            + 'games' + str(n_games) + '_' \
-            + 'fc1_' + str(agent.fc1_dims) + '_' \
-            + 'fc2_' + str(agent.fc2_dims)
         
-        figure_file = 'plots/' + filename + '_' + str(id) + '.png'
+        agent.load_models()
 
-        best_score = -30
-        score_history = []
+        n_games = 30
+        # filename = "" \
+        #     + 'Coppelia' + '_' \
+        #     + 'ddpg' + '_' \
+        #     + 'alpha' + str(agent.alpha) + '_' \
+        #     + 'beta' +  str(agent.beta) + '_' \
+        #     + 'games' + str(n_games) + '_' \
+        #     + 'fc1_' + str(agent.fc1_dims) + '_' \
+        #     + 'fc2_' + str(agent.fc2_dims)
+        
+        # figure_file = 'plots/' + filename + '_' + str(id) + '.png'
+
+        # best_score = -30
+        # score_history = []
 
 
 
@@ -241,36 +248,34 @@ def joint_control_ddpg(m2s, s2m, pid, file_path, id):
 
             done = False
             score = 0
-            agent.noise.reset()
+            # agent.noise.reset()
             while not done:
-                action = agent.choose_action(observation)
+                action = agent.choose_action_eval(observation)
                 s2m.put([torch.tensor(action)])
 
                 observation_ = m2s.get()
-                reward = m2s.get()
+                # reward = m2s.get()
                 done = m2s.get()
 
 
-                agent.remember(observation, action, reward, observation_, done)
-                agent.learn()
-                score += reward
+                # agent.remember(observation, action, reward, observation_, done)
+                # agent.learn()
+                # score += reward
                 observation = observation_
 
 
 
-            score_history.append(score)
-            avg_score = np.mean(score_history[-100:])
+        #     score_history.append(score)
+        #     avg_score = np.mean(score_history[-100:])
 
-            if avg_score > best_score:
-                best_score = avg_score
-                agent.save_models()
+        #     if avg_score > best_score:
+        #         best_score = avg_score
+        #         agent.save_models()
 
-            print('episode ', i, 'score %.1f' % score,
-                    'average score %.1f' % avg_score, flush=True)
-        x = [i+1 for i in range(n_games)]
-        plc_ddpg(x, score_history, figure_file)
-
-
+        #     print('episode ', i, 'score %.1f' % score,
+        #             'average score %.1f' % avg_score, flush=True)
+        # x = [i+1 for i in range(n_games)]
+        # plc_ddpg(x, score_history, figure_file)
 
 
 def graph_state():
@@ -1076,7 +1081,7 @@ def main_process(file_path, id):
 
                     reward, reward_values = reward_function(actual_pos, actual_ori, actual_joint_positions)
                     # q4.put(reward_values)
-                    m2s.put(reward)
+                    # m2s.put(reward)
 
                     achieved = is_it_done(actual_pos)
                     fallen = is_fallen(actual_pos)
@@ -1130,7 +1135,7 @@ def main_process(file_path, id):
 
         # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m), daemon=True)
         # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
-        p1 = mp.Process(target=joint_control_td3, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
+        p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
         processes.append(p1)
         # p1 = Process(target=joint_control, args=(q1,))
         p1.start()
@@ -1239,12 +1244,17 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, sigint_handler)
 
-    num_instances = 10
 
-    bash_commands = []
-    for i in range(num_instances):
-        command = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh -h -gparam1=" + str(i) + " -GROSInterface.nodeName=MyNodeName" + str(i) + " /home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
-        bash_commands.append(command)
+
+    i = 9
+
+    # num_instances = 1
+
+    # bash_commands = []
+    # for i in range(num_instances):
+
+    command = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh -gparam1=" + str(i) + " -GROSInterface.nodeName=MyNodeName" + str(i) + " /home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
+    # bash_commands.append(command)
 
     # for command in bash_commands:
     #     print(command)
@@ -1254,23 +1264,23 @@ if __name__ == '__main__':
     simulator_processes = []
 
     # Loop through the commands and start each process
-    for i, command in enumerate(bash_commands):
-        # Open a file for each process's output
-        with open(f"output_logs/output_{i+1}.txt", "w") as outfile:
+    # for i, command in enumerate(bash_commands):
+    #     # Open a file for each process's output
+    with open(f"output_logs/output_eval{i+1}.txt", "w") as outfile:
 
-            arguments = command.split()
-  
-            process = subprocess.Popen([arguments[0]] + arguments[1:], shell=False, stdout=outfile, stderr=outfile, preexec_fn=os.setsid)
-            simulator_processes.append((process, f"output_logs/output_{i+1}.txt"))
+        arguments = command.split()
+
+        process = subprocess.Popen([arguments[0]] + arguments[1:], shell=False, stdout=outfile, stderr=outfile, preexec_fn=os.setsid)
+        simulator_processes.append((process, f"output_logs/output_{i+1}.txt"))
 
     time.sleep(7)
 
     main_processes = []
-    for i in range(num_instances):
-        file_path = "output_logs/output_main" + str(i) +".txt"
-        p = mp.Process(target=main_process, args=(file_path, i))
-        main_processes.append(p)
-        p.start()
+    # for i in range(num_instances):
+    file_path = "output_logs/output_main_eval" + str(i) +".txt"
+    p = mp.Process(target=main_process, args=(file_path, i))
+    main_processes.append(p)
+    p.start()
 
 
     while True:
