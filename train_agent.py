@@ -78,6 +78,12 @@ actual_ori = []
 actual_time = 0
 step_cb_enable = False
 
+prev_pos = []
+prev_ori = []
+prev_joint_positions = []
+
+dt = 0
+
 
 #------------------------------------------------------------------------------------------------------------
 
@@ -121,8 +127,8 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
         class Coppelia:
             def __init__(self):
                 # rospy.init_node('hugo_vision' + str(id))
-                self.observation_space  = torch.tensor(96*[0])
-                self.action_space = torch.tensor(26 * [0])
+                self.observation_space  = torch.tensor(156*[0])
+                self.action_space = torch.tensor(20 * [0])
 
             def reset(self):
                 # print("reset called")
@@ -135,9 +141,9 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
 
         agent = Agent_td3(id, alpha=0.001, beta=0.001, 
                         input_dims=env.observation_space.shape, tau=0.005, env=env,
-                        batch_size=100, fc1_dims=800, fc2_dims=600, 
+                        batch_size=100, fc1_dims=800, fc2_dims=600, fc3_dims=400,
                         n_actions=env.action_space.shape[0])
-        n_games = 1500
+        n_games = 15000
         filename = "" \
             + 'Coppelia' + '_' \
             + 'td3' + '_' \
@@ -145,11 +151,12 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
             + 'beta' +  str(agent.beta) + '_' \
             + 'games' + str(n_games) + '_' \
             + 'fc1_' + str(agent.fc1_dims) + '_' \
-            + 'fc2_' + str(agent.fc2_dims)
+            + 'fc2_' + str(agent.fc2_dims) + '_' \
+            + 'fc3_' + str(agent.fc3_dims)
         
         figure_file = 'plots/' + filename + '_' + str(id) + '.png'
 
-        best_score = -30
+        best_score = -500
         score_history = []
 
 
@@ -157,6 +164,7 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
 
         for i in range(n_games):
                 observation = env.reset()
+                # print("first observation", observation, flush=True)
                 done = False
                 score = 0
 
@@ -167,14 +175,17 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
                     # observation_, reward, done, _, _ = env.step(action)
 
                     observation_ = m2s.get()
+                    # print("other observation", observation, flush=True)
                     reward = m2s.get()
                     done = m2s.get()
 
 
                     agent.remember(observation, action, reward, observation_, done)
                     agent.learn()
+                    # print("reward", reward, flush=True)
                     score += reward
                     observation = observation_
+
                 score_history.append(score)
                 avg_score = np.mean(score_history[-100:])
 
@@ -182,8 +193,8 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
                     best_score = avg_score
                     agent.save_models()
 
-                print('episode ', i, 'score %.2f' % score,
-                        'trailing 100 games avg %.3f' % avg_score, flush=True)
+                print('episode ', i, 'score %.1f' % score,
+                        'trailing 100 games avg %.1f' % avg_score, flush=True)
 
         x = [i+1 for i in range(n_games)]
         plc_td3(x, score_history, figure_file)
@@ -202,8 +213,8 @@ def joint_control_ddpg(m2s, s2m, pid, file_path, id):
         class Coppelia:
             def __init__(self):
                 # rospy.init_node('hugo_vision' + str(id))
-                self.observation_space  = torch.tensor(96*[0])
-                self.action_space = torch.tensor(26 * [0])
+                self.observation_space  = torch.tensor(156*[0])
+                self.action_space = torch.tensor(20 * [0])
 
             def reset(self):
                 # print("reset called")
@@ -216,9 +227,9 @@ def joint_control_ddpg(m2s, s2m, pid, file_path, id):
 
         agent = Agent_ddpg(id, alpha=0.0001, beta=0.001, 
                         input_dims=env.observation_space.shape, tau=0.001,
-                        batch_size=64, fc1_dims=800, fc2_dims=600, 
+                        batch_size=64, fc1_dims=800, fc2_dims=600, fc3_dims=400,
                         n_actions=env.action_space.shape[0])
-        n_games = 3000
+        n_games = 10000
         filename = "" \
             + 'Coppelia' + '_' \
             + 'ddpg' + '_' \
@@ -270,8 +281,7 @@ def joint_control_ddpg(m2s, s2m, pid, file_path, id):
         x = [i+1 for i in range(n_games)]
         plc_ddpg(x, score_history, figure_file)
 
-
-
+#------------------------------------------------------------------------------------------------------------
 
 def graph_state():
 
@@ -409,10 +419,7 @@ def graph_state():
         fig.canvas.flush_events() 
         rate.sleep()
 
-    
-
 #------------------------------------------------------------------------------------------------------------
-
 
 def graph_windowed_reward(q):
 
@@ -551,9 +558,7 @@ def graph_windowed_reward(q):
         fig.canvas.draw() 
         fig.canvas.flush_events() 
 
-
 #------------------------------------------------------------------------------------------------------------
-
 
 def graph_current_reward(q):
 
@@ -728,12 +733,11 @@ def graph_current_reward(q):
         fig.canvas.draw() 
         fig.canvas.flush_events() 
 
-
 #------------------------------------------------------------------------------------------------------------
 
 
-def main_process(file_path, id):
-    with open(file_path, 'w') as f:
+def main_process(file_path1, file_path2, id):
+    with open(file_path1, 'w') as f:
         sys.stdout = f
         first = 1
 
@@ -871,7 +875,13 @@ def main_process(file_path, id):
                 return True
             return False
         
-        def reward_function(actual_pos, actual_ori, actual_joint_positions):
+        def reward_function(actual_time, actual_pos, actual_ori, actual_joint_positions, speed, ang_speed):
+
+            global original_pos
+            global original_ori
+
+           
+
 
             def radians_to_degrees(radian_list):
                 return [radian * (180 / math.pi) for radian in radian_list]
@@ -923,10 +933,6 @@ def main_process(file_path, id):
 
                 return counter, joints_limited
 
-
-            global original_pos
-            global original_ori
-
             oxp = original_pos[0]
             oyp = original_pos[1]
             ozp = original_pos[2]
@@ -944,17 +950,27 @@ def main_process(file_path, id):
             azo = actual_ori[2]
 
 
-            forward_weight = 50
-            lateral_weigth = 3
-            vertical_weigth = 2
-            x_rot_weight = 1.5
-            y_rot_weight = 7
-            z_rot_weight = 3
-            limits_weight = 0.5
+            forward_weight = 60
+            lateral_weigth = 10
+            vertical_weigth = 5
+
+            x_rot_weight = 3
+            y_rot_weight = 10
+            z_rot_weight = 5
+
+            limits_weight = 0.3
             fall_weight = 0
+            time_weight = 15
+
+            speed_x_weight = 2
+            speed_y_weight = 20
+            speed_z_weight = 20
+            ang_speed_x_weight = 20
+            ang_speed_y_weight = 20
+            ang_speed_z_weight = 20
             
             if azp < 0.4:
-                fall_weight = 30
+                fall_weight = 500
 
 
             fall_reward = 1
@@ -974,25 +990,63 @@ def main_process(file_path, id):
 
 
 
-            forward = forward_weight    * forward_reward    
-            lateral = lateral_weigth    * lateral_reward    * -1
-            vertical = vertical_weigth  * vertical_reward   * -1
-            x_rot = x_rot_weight        * x_rot_reward      * -1
-            y_rot = y_rot_weight        * y_rot_reward      * -1
-            z_rot = z_rot_weight        * z_rot_reward      * -1
-            limits = limits_weight      * limits_reward     * -1
-            fall = fall_weight          * fall_reward       * -1
+            forward = forward_weight            * forward_reward    
+            lateral = lateral_weigth            * lateral_reward    * -1
+            vertical = vertical_weigth          * vertical_reward   * -1
+            x_rot = x_rot_weight                * x_rot_reward      * -1
+            y_rot = y_rot_weight                * y_rot_reward      * -1
+            z_rot = z_rot_weight                * z_rot_reward      * -1
+            limits = limits_weight              * limits_reward     * -1
+            fall = fall_weight                  * fall_reward       * -1
+            time = time_weight                  * actual_time       * +1
+            # speed_x = speed_x_weight          * speed[0]          * +1
+            speed_y = speed_y_weight            * speed[1]          * -1
+            speed_z = speed_z_weight            * speed[2]          * -1
+            ang_speed_x = ang_speed_x_weight    * ang_speed[0]      * -1
+            ang_speed_y = ang_speed_y_weight    * ang_speed[1]      * -1
+            ang_speed_z = ang_speed_z_weight    * ang_speed[2]      * -1
+
+
             
 
-            reward = 0 \
-            + forward \
-            + lateral \
-            + vertical \
-            + x_rot \
-            + y_rot \
-            + z_rot \
-            + limits \
-            + fall
+            reward = 0      \
+            + forward       \
+            + lateral       \
+            + vertical      \
+            + x_rot         \
+            + y_rot         \
+            + z_rot         \
+            + limits        \
+            + fall          \
+            + time          \
+            + speed_y       \
+            + speed_z       \
+            + ang_speed_x   \
+            + ang_speed_y   \
+            + ang_speed_z
+
+
+
+            # print('\n')
+            # print("forward", forward, flush=True)
+            # print("lateral", lateral, flush=True)
+            # print("vertical", vertical, flush=True)
+            # print("x_rot", x_rot, flush=True)
+            # print("y_rot", y_rot, flush=True)
+            # print("z_rot", z_rot, flush=True)
+            # print("limits", limits, flush=True)
+            # print("fall", fall, flush=True)
+            # print("time", time, flush=True)
+            # print("speed_y", speed_y, flush=True)
+            # print("speed_z", speed_z, flush=True)
+            # print("ang_speed_x", ang_speed_x, flush=True)
+            # print("ang_speed_y", ang_speed_y, flush=True)
+            # print("ang_speed_z", ang_speed_z, flush=True)
+            # print("reward", reward)
+            # print('\n')
+
+
+            
 
             reward_values = \
             {
@@ -1007,17 +1061,56 @@ def main_process(file_path, id):
             }
 
 
-            return reward, reward_values
+            return reward/10, reward_values
+        
+
+        def calc_core_velocities(actual_pos, actual_ori):
+            global prev_pos
+            global prev_ori
+            global dt
+
+            # diff_pos = abs(prev_pos - actual_pos)#the sign matters for the first element!!!!
+            # diff_ori = abs(prev_ori - actual_ori) #the sign doesnt matter, any difference is bad
+
+            diff_pos = [abs(a - b) for a, b in zip(prev_pos, actual_pos)]
+            diff_ori = [abs(a - b) for a, b in zip(prev_ori, actual_ori)]
+
+            prev_pos = actual_pos
+            prev_ori = actual_ori
+
+            # speed = diff_pos / dt
+            speed = [a/dt for a in diff_pos]
+            # ang_speed = diff_ori / dt
+            ang_speed = [a/dt for a in diff_ori]
+
+            return speed, ang_speed
+        
+
+        def calc_joint_velocities(actual_joint_positions):
+            global prev_joint_positions
+
+            # joint_velocities = prev_joint_positions - actual_joint_positions #its a state value so we don't alter it
+            joint_velocities = [abs(a - b) for a, b in zip(prev_joint_positions, actual_joint_positions)]
+            prev_joint_positions = actual_joint_positions #update the previous value for next calculation
+            return joint_velocities
+
+
+
 
         def step_cb(msg):
             global step_cb_enable
 
-            global first
             global got_state
 
             global actual_joint_positions
             global actual_pos
             global actual_ori
+
+            global prev_pos
+            global prev_ori
+            global prev_joint_positions
+
+            global actual_time
 
             global m2s
             global s2m
@@ -1031,6 +1124,12 @@ def main_process(file_path, id):
 
             global cold_start
 
+            global joint_velocities_shift_reg
+            global core_speed_shift_reg
+            global core_ang_speed_shift_reg
+            global dt
+    
+
             # print("mydebug - step callback called", flush=True)
 
 
@@ -1043,19 +1142,42 @@ def main_process(file_path, id):
                     # print("waiting for state, now it's ", got_state, flush=True)
                 got_state = False
 
-                pos_shift_reg = shift_elements(pos_shift_reg, actual_pos, 18, 3) #TODO generalize
-                ori_shift_reg = shift_elements(ori_shift_reg, actual_ori, 18, 3) #TODO generalize
+                pos_shift_reg = shift_elements(pos_shift_reg, actual_pos, 9, 3) #TODO generalize
+                ori_shift_reg = shift_elements(ori_shift_reg, actual_ori, 9, 3) #TODO generalize
                 joint_positions_shift_reg = shift_elements(joint_positions_shift_reg, actual_joint_positions, 60, 20)
 
-                state = [*pos_shift_reg, *ori_shift_reg, *joint_positions_shift_reg]
+                if cold_start:
+                    #velocities are 0 at the start
+                    speed = [0] * 3
+                    ang_speed = [0] * 3
+                    joint_velocities = [0] * 20
+                else:
+                    speed, ang_speed = calc_core_velocities(actual_pos, actual_ori) #needs previous value for calculation
+                    joint_velocities = calc_joint_velocities(actual_joint_positions)  #needs previous value for calculation
+
+                core_speed_shift_reg = shift_elements(core_speed_shift_reg, speed, 9, 3) 
+                core_ang_speed_shift_reg = shift_elements(core_ang_speed_shift_reg, speed, 9, 3) 
+                    
+
+                joint_velocities_shift_reg = shift_elements(joint_velocities_shift_reg, joint_velocities, 60, 20)
+
+                state = [*pos_shift_reg, *ori_shift_reg, *joint_positions_shift_reg, *core_speed_shift_reg, *core_ang_speed_shift_reg, *joint_velocities_shift_reg]
+                # 9 9 60 9 9 60 = 156
 
 
                 #at this point we have the state!!!!!!!!
                 if cold_start:
                     cold_start = False
 
+                    #original position needs to be saved for later reference
                     original_pos = actual_pos
                     original_ori = actual_ori
+
+                    #in first call we save the state as previous state
+                    prev_pos = actual_pos
+                    prev_ori = actual_ori
+                    prev_joint_positions = actual_joint_positions
+
 
                     m2s.put(state)
                     action = s2m.get()
@@ -1068,13 +1190,18 @@ def main_process(file_path, id):
                 
                     joint_publisher0.publish(action_packet)
                     step_publisher.publish(Bool(True))
+
+                    # dt = actual_time
+                    # print("dt = ", dt, flush=True)
+                    dt = 0.05
                 
                     return
 
                 else:
+
                     m2s.put(state)
 
-                    reward, reward_values = reward_function(actual_pos, actual_ori, actual_joint_positions)
+                    reward, reward_values = reward_function(actual_time, actual_pos, actual_ori, actual_joint_positions, speed, ang_speed)
                     # q4.put(reward_values)
                     m2s.put(reward)
 
@@ -1111,11 +1238,23 @@ def main_process(file_path, id):
 
 
         global pos_shift_reg 
-        pos_shift_reg = [0] * 18
+        pos_shift_reg = [0] * 9
+
         global ori_shift_reg
-        ori_shift_reg = [0] * 18
+        ori_shift_reg = [0] * 9
+
         global joint_positions_shift_reg
         joint_positions_shift_reg = [0] * 60
+
+        global joint_velocities_shift_reg
+        joint_velocities_shift_reg = [0] * 60
+
+        global core_speed_shift_reg
+        core_speed_shift_reg = [0] * 9
+
+        global core_ang_speed_shift_reg
+        core_ang_speed_shift_reg = [0] * 9
+
 
         pause_flag = True
         sim_state = Float32MultiArray()
@@ -1130,7 +1269,7 @@ def main_process(file_path, id):
 
         # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m), daemon=True)
         # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
-        p1 = mp.Process(target=joint_control_td3, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
+        p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid(), file_path2, id), daemon=True)
         processes.append(p1)
         # p1 = Process(target=joint_control, args=(q1,))
         p1.start()
@@ -1267,8 +1406,9 @@ if __name__ == '__main__':
 
     main_processes = []
     for i in range(num_instances):
-        file_path = "output_logs/output_main" + str(i) +".txt"
-        p = mp.Process(target=main_process, args=(file_path, i))
+        file_path1 = "output_logs/output_main" + str(i) +".txt"
+        file_path2 = "output_logs/output_torch" + str(i) +".txt"
+        p = mp.Process(target=main_process, args=(file_path1, file_path2, i))
         main_processes.append(p)
         p.start()
 

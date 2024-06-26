@@ -6,8 +6,7 @@ import torch.optim as optim
 import numpy as np
 
 class CriticNetwork(nn.Module):
-    def __init__(self, beta, input_dims, fc1_dims, fc2_dims, n_actions,
-            name, chkpt_dir='tmp/td3'):
+    def __init__(self, id, beta, input_dims, fc1_dims, fc2_dims, n_actions, name, chkpt_dir='tmp/td3'):
         super(CriticNetwork, self).__init__()
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
@@ -15,7 +14,8 @@ class CriticNetwork(nn.Module):
         self.n_actions = n_actions
         self.name = name
         self.checkpoint_dir = chkpt_dir
-        self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_td3')
+        # self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_td3')
+        self.checkpoint_file = os.path.join(self.checkpoint_dir, name + '_td3' + '_fc1' + str(self.fc1_dims) + '_fc2' + str(self.fc2_dims) + '_' +str(id))
 
         # I think this breaks if the env has a 2D state representation
         self.fc1 = nn.Linear(self.input_dims[0] + n_actions, self.fc1_dims)
@@ -43,10 +43,11 @@ class CriticNetwork(nn.Module):
 
     def load_checkpoint(self):
         print('... loading checkpoint ...')
+        print("loading checkpoint ", self.checkpoint_file, flush=True)
         self.load_state_dict(T.load(self.checkpoint_file))
 
 class ActorNetwork(nn.Module):
-    def __init__(self, alpha, input_dims, fc1_dims, fc2_dims,
+    def __init__(self, id, alpha, input_dims, fc1_dims, fc2_dims,
             n_actions, name, chkpt_dir='tmp/td3'):
         super(ActorNetwork, self).__init__()
         self.input_dims = input_dims
@@ -55,7 +56,8 @@ class ActorNetwork(nn.Module):
         self.n_actions = n_actions
         self.name = name
         self.checkpoint_dir = chkpt_dir
-        self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_td3')
+        # self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_td3')
+        self.checkpoint_file = os.path.join(self.checkpoint_dir, name + '_td3' + '_fc1' + str(self.fc1_dims) + '_fc2' + str(self.fc2_dims) + '_' +str(id))
 
         self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
@@ -82,6 +84,7 @@ class ActorNetwork(nn.Module):
 
     def load_checkpoint(self):
         print('... loading checkpoint ...')
+        print("loading checkpoint ", self.checkpoint_file, flush=True)
         self.load_state_dict(T.load(self.checkpoint_file))
 
 

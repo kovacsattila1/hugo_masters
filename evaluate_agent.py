@@ -78,6 +78,12 @@ actual_ori = []
 actual_time = 0
 step_cb_enable = False
 
+prev_pos = []
+prev_ori = []
+prev_joint_positions = []
+
+dt = 0
+
 
 #------------------------------------------------------------------------------------------------------------
 
@@ -115,78 +121,79 @@ step_cb_enable = False
 
 def joint_control_td3(m2s, s2m, pid, file_path, id):
 
-    with open(file_path, 'w') as f:
-        sys.stdout = f
+    # with open(file_path, 'w') as f:
+    #     sys.stdout = f
 
-        class Coppelia:
-            def __init__(self):
-                # rospy.init_node('hugo_vision' + str(id))
-                self.observation_space  = torch.tensor(96*[0])
-                self.action_space = torch.tensor(26 * [0])
+    class Coppelia:
+        def __init__(self):
+            # rospy.init_node('hugo_vision' + str(id))
+            self.observation_space  = torch.tensor(156*[0])
+            self.action_space = torch.tensor(20 * [0])
 
-            def reset(self):
-                # print("reset called")
-                os.kill(pid, signal.SIGALRM)
-                state = m2s.get()
-                return state
-            
-
-        env = Coppelia()
-
-        agent = Agent_td3(id, alpha=0.001, beta=0.001, 
-                        input_dims=env.observation_space.shape, tau=0.005, env=env,
-                        batch_size=100, fc1_dims=800, fc2_dims=600, 
-                        n_actions=env.action_space.shape[0])
-        n_games = 1500
-        filename = "" \
-            + 'Coppelia' + '_' \
-            + 'td3' + '_' \
-            + 'alpha' + str(agent.alpha) + '_' \
-            + 'beta' +  str(agent.beta) + '_' \
-            + 'games' + str(n_games) + '_' \
-            + 'fc1_' + str(agent.fc1_dims) + '_' \
-            + 'fc2_' + str(agent.fc2_dims)
+        def reset(self):
+            # print("reset called")
+            os.kill(pid, signal.SIGALRM)
+            state = m2s.get()
+            return state
         
-        figure_file = 'plots/' + filename + '_' + str(id) + '.png'
 
-        best_score = -30
-        score_history = []
+    env = Coppelia()
+
+    agent = Agent_td3(id, alpha=0.001, beta=0.001, 
+                    input_dims=env.observation_space.shape, tau=0.005, env=env,
+                    batch_size=100, fc1_dims=1000, fc2_dims=800, 
+                    n_actions=env.action_space.shape[0])
+    agent.load_models()
+    n_games = 1000
+    # filename = "" \
+    #     + 'Coppelia' + '_' \
+    #     + 'td3' + '_' \
+    #     + 'alpha' + str(agent.alpha) + '_' \
+    #     + 'beta' +  str(agent.beta) + '_' \
+    #     + 'games' + str(n_games) + '_' \
+    #     + 'fc1_' + str(agent.fc1_dims) + '_' \
+    #     + 'fc2_' + str(agent.fc2_dims)
+    
+    # figure_file = 'plots/' + filename + '_' + str(id) + '.png'
+
+    # best_score = -30
+    # score_history = []
 
 
 
 
-        for i in range(n_games):
-                observation = env.reset()
-                done = False
-                score = 0
+    for i in range(n_games):
+            observation = env.reset()
+            done = False
+            score = 0
 
-                while not done:
-                    action = agent.choose_action(observation)
-                    s2m.put([torch.tensor(action)])
-                    # print(env.step(action))
-                    # observation_, reward, done, _, _ = env.step(action)
+            while not done:
+                action = agent.choose_action_eval(observation)
+                s2m.put([torch.tensor(action)])
+                # print(env.step(action))
+                # observation_, reward, done, _, _ = env.step(action)
 
-                    observation_ = m2s.get()
-                    reward = m2s.get()
-                    done = m2s.get()
+                observation_ = m2s.get()
+                # reward = m2s.get()
+                done = m2s.get()
 
 
-                    agent.remember(observation, action, reward, observation_, done)
-                    agent.learn()
-                    score += reward
-                    observation = observation_
-                score_history.append(score)
-                avg_score = np.mean(score_history[-100:])
+    #             agent.remember(observation, action, reward, observation_, done)
+    #             agent.learn()
+    #             score += reward
+                observation = observation_
+    #         score_history.append(score)
+    #         avg_score = np.mean(score_history[-100:])
 
-                if avg_score > best_score:
-                    best_score = avg_score
-                    agent.save_models()
+    #         if avg_score > best_score:
+    #             best_score = avg_score
+    #             agent.save_models()
 
-                print('episode ', i, 'score %.2f' % score,
-                        'trailing 100 games avg %.3f' % avg_score, flush=True)
+    #         print('episode ', i, 'score %.2f' % score,
+    #                 'trailing 100 games avg %.3f' % avg_score, flush=True)
 
-        x = [i+1 for i in range(n_games)]
-        plc_td3(x, score_history, figure_file)
+    # x = [i+1 for i in range(n_games)]
+    # plc_td3(x, score_history, figure_file)
 
 
 
@@ -738,145 +745,151 @@ def graph_current_reward(q):
 
 
 def main_process(file_path, id):
-    with open(file_path, 'w') as f:
-        sys.stdout = f
-        first = 1
+    # with open(file_path, 'w') as f:
+        # sys.stdout = f
+        # first = 1
 
 
-        def shift_elements(lst, new_elements, reg_len, shifting_amount):
-            """
-            Shifts three new elements into a list of length 18, initially filled with zeros.
-            
-            Parameters:
-            lst (list): The original list of length 18.
-            new_elements (list): A list of three new elements to be added.
-            
-            Returns:
-            list: The updated list after shifting in the new elements.
-            """
-            if len(lst) != reg_len:
-                raise ValueError("The original list must be of length " + str(reg_len))
-            if len(new_elements) != shifting_amount:
-                raise ValueError("The new elements list must contain exactly " + str(shifting_amount) +  " elements but got " + str(len(new_elements)))
+    def shift_elements(lst, new_elements, reg_len, shifting_amount):
+        """
+        Shifts three new elements into a list of length 18, initially filled with zeros.
         
-            # Remove the last three elements
-            lst = lst[:-shifting_amount]
-            # Add the new elements to the front
-            lst = new_elements + lst
-            return lst
-
-
-        def map_to_discrete_range(value):
-            input_min, input_max = -1, 1
-            output_min, output_max = -1, 1
-
-            # Clip the value to the input range
-            value = np.clip(value, input_min, input_max)
-            
-            # Normalize the value to a 0-1 range
-            normalized_value = (value - input_min) / (input_max - input_min)
-            
-            # Scale to the output range and round to the nearest integer
-            discrete_value = np.round(normalized_value * (output_max - output_min) + output_min).astype(float)
-            
-            return discrete_value
-
-        #Ctrl-C handling
-        def sigint_handler(*args):
-            print("\n exiting!!!", flush=True)
-            stop_publisher.publish(Bool(True))
-
-            for p in processes:
-                p.kill()
-                p.join()
-
-            print("Processes should be joined by now", flush=True)
-            exit(0)
-
-        def sigquit_handler(*args):
-            print("You pressed Ctrl + \\", flush=True)
-
-        def sigalrm_handler(*args):
-            global step_cb_enable
-            global cold_start
-            global first
-
-            # os.kill(os.getpid(p4), signal.SIGALRM)
-
-            cold_start = True
-            # print("sigalarm received in main form subprocess", flush = True)
-            z = Bool(True)
-
-            delay = 0.3
-
-            step_cb_enable = False
-
-            sync_publisher.publish(z)   #synchronize
-            # print("sync publisher called", flush=True)
-            time.sleep(delay)
-
-            stop_publisher.publish(z)  #stop simulation
-            # print("stop publisher called", flush=True)
-            time.sleep(delay)
-
-            start_publisher.publish(z)  #start simulation
-            # print("start publisher called", flush=True)
-            time.sleep(delay)
-
-            step_publisher.publish(z)   #next step
-            # print("trig ", flush=True)
-            time.sleep(delay)
-
-            step_cb_enable = True
-
-            step_publisher.publish(z) #needed because the simulator doesnt publish the states with only one step
-            # print("trig next2", flush=True)
-            time.sleep(delay)
-
-            # print("sigalarm handling ended\n", flush = True)
-
-            return
-            # step_cb("alma")
-
-        def state_cb(msg):
-            # if state_cb_enable 
-            # print("state callback called!!!", flush=True)
-
-            global actual_joint_positions
-            global actual_pos
-            global actual_ori
-            global actual_time
-            global got_state
-
-            data_list = list(msg.data)
-            actual_time = data_list[0]
-            actual_pos = data_list[1:4]
-            actual_ori = data_list[4:7]
-            actual_joint_positions = data_list[7:]
-
-            got_state = True
-            return 
-
-        def simState_cb(msg):
-            # print("simstate callback called!!!!", flush=True)
-
-            global sim_state
-            global got_simstate
-            sim_state = msg
-            got_simstate = True
-
-            return
+        Parameters:
+        lst (list): The original list of length 18.
+        new_elements (list): A list of three new elements to be added.
         
-        def is_it_done(state):
-            return 0
+        Returns:
+        list: The updated list after shifting in the new elements.
+        """
+        if len(lst) != reg_len:
+            raise ValueError("The original list must be of length " + str(reg_len))
+        if len(new_elements) != shifting_amount:
+            raise ValueError("The new elements list must contain exactly " + str(shifting_amount) +  " elements but got " + str(len(new_elements)))
+
+        # Remove the last three elements
+        lst = lst[:-shifting_amount]
+        # Add the new elements to the front
+        lst = new_elements + lst
+        return lst
+
+
+    def map_to_discrete_range(value):
+        input_min, input_max = -1, 1
+        output_min, output_max = -1, 1
+
+        # Clip the value to the input range
+        value = np.clip(value, input_min, input_max)
         
-        def is_fallen(pos):
-            global sim_state
-            if pos[2] < 0.4:
-                return True
-            return False
+        # Normalize the value to a 0-1 range
+        normalized_value = (value - input_min) / (input_max - input_min)
         
-        def reward_function(actual_pos, actual_ori, actual_joint_positions):
+        # Scale to the output range and round to the nearest integer
+        discrete_value = np.round(normalized_value * (output_max - output_min) + output_min).astype(float)
+        
+        return discrete_value
+
+    #Ctrl-C handling
+    def sigint_handler(*args):
+        print("\n exiting!!!", flush=True)
+        stop_publisher.publish(Bool(True))
+
+        for p in processes:
+            p.kill()
+            p.join()
+
+        print("Processes should be joined by now", flush=True)
+        exit(0)
+
+    def sigquit_handler(*args):
+        print("You pressed Ctrl + \\", flush=True)
+
+    def sigalrm_handler(*args):
+        global step_cb_enable
+        global cold_start
+        global first
+
+        # os.kill(os.getpid(p4), signal.SIGALRM)
+
+        cold_start = True
+        # print("sigalarm received in main form subprocess", flush = True)
+        z = Bool(True)
+
+        delay = 0.3
+
+        step_cb_enable = False
+
+        sync_publisher.publish(z)   #synchronize
+        # print("sync publisher called", flush=True)
+        time.sleep(delay)
+
+        stop_publisher.publish(z)  #stop simulation
+        # print("stop publisher called", flush=True)
+        time.sleep(delay)
+
+        start_publisher.publish(z)  #start simulation
+        # print("start publisher called", flush=True)
+        time.sleep(delay)
+
+        step_publisher.publish(z)   #next step
+        # print("trig ", flush=True)
+        time.sleep(delay)
+
+        step_cb_enable = True
+
+        step_publisher.publish(z) #needed because the simulator doesnt publish the states with only one step
+        # print("trig next2", flush=True)
+        time.sleep(delay)
+
+        # print("sigalarm handling ended\n", flush = True)
+
+        return
+        # step_cb("alma")
+
+    def state_cb(msg):
+        # if state_cb_enable 
+        # print("state callback called!!!", flush=True)
+
+        global actual_joint_positions
+        global actual_pos
+        global actual_ori
+        global actual_time
+        global got_state
+
+        data_list = list(msg.data)
+        actual_time = data_list[0]
+        actual_pos = data_list[1:4]
+        actual_ori = data_list[4:7]
+        actual_joint_positions = data_list[7:]
+
+        got_state = True
+        return 
+
+    def simState_cb(msg):
+        # print("simstate callback called!!!!", flush=True)
+
+        global sim_state
+        global got_simstate
+        sim_state = msg
+        got_simstate = True
+
+        return
+
+    def is_it_done(state):
+        return 0
+
+    def is_fallen(pos):
+        global sim_state
+        if pos[2] < 0.4:
+            return True
+        return False
+
+    def reward_function(actual_time, actual_pos, actual_ori, actual_joint_positions, speed, ang_speed):
+
+            global original_pos
+            global original_ori
+
+           
+
 
             def radians_to_degrees(radian_list):
                 return [radian * (180 / math.pi) for radian in radian_list]
@@ -928,10 +941,6 @@ def main_process(file_path, id):
 
                 return counter, joints_limited
 
-
-            global original_pos
-            global original_ori
-
             oxp = original_pos[0]
             oyp = original_pos[1]
             ozp = original_pos[2]
@@ -950,16 +959,26 @@ def main_process(file_path, id):
 
 
             forward_weight = 50
-            lateral_weigth = 3
-            vertical_weigth = 2
-            x_rot_weight = 1.5
-            y_rot_weight = 7
-            z_rot_weight = 3
-            limits_weight = 0.5
+            lateral_weigth = 10
+            vertical_weigth = 5
+
+            x_rot_weight = 3
+            y_rot_weight = 10
+            z_rot_weight = 5
+
+            limits_weight = 0.3
             fall_weight = 0
+            time_weight = 20
+
+            speed_x_weight = 2
+            speed_y_weight = 20
+            speed_z_weight = 20
+            ang_speed_x_weight = 20
+            ang_speed_y_weight = 20
+            ang_speed_z_weight = 20
             
             if azp < 0.4:
-                fall_weight = 30
+                fall_weight = 500
 
 
             fall_reward = 1
@@ -979,25 +998,63 @@ def main_process(file_path, id):
 
 
 
-            forward = forward_weight    * forward_reward    
-            lateral = lateral_weigth    * lateral_reward    * -1
-            vertical = vertical_weigth  * vertical_reward   * -1
-            x_rot = x_rot_weight        * x_rot_reward      * -1
-            y_rot = y_rot_weight        * y_rot_reward      * -1
-            z_rot = z_rot_weight        * z_rot_reward      * -1
-            limits = limits_weight      * limits_reward     * -1
-            fall = fall_weight          * fall_reward       * -1
+            forward = forward_weight            * forward_reward    
+            lateral = lateral_weigth            * lateral_reward    * -1
+            vertical = vertical_weigth          * vertical_reward   * -1
+            x_rot = x_rot_weight                * x_rot_reward      * -1
+            y_rot = y_rot_weight                * y_rot_reward      * -1
+            z_rot = z_rot_weight                * z_rot_reward      * -1
+            limits = limits_weight              * limits_reward     * -1
+            fall = fall_weight                  * fall_reward       * -1
+            time = time_weight                  * actual_time       * +1
+            # speed_x = speed_x_weight          * speed[0]          * +1
+            speed_y = speed_y_weight            * speed[1]          * -1
+            speed_z = speed_z_weight            * speed[2]          * -1
+            ang_speed_x = ang_speed_x_weight    * ang_speed[0]      * -1
+            ang_speed_y = ang_speed_y_weight    * ang_speed[1]      * -1
+            ang_speed_z = ang_speed_z_weight    * ang_speed[2]      * -1
+
+
             
 
-            reward = 0 \
-            + forward \
-            + lateral \
-            + vertical \
-            + x_rot \
-            + y_rot \
-            + z_rot \
-            + limits \
-            + fall
+            reward = 0      \
+            + forward       \
+            + lateral       \
+            + vertical      \
+            + x_rot         \
+            + y_rot         \
+            + z_rot         \
+            + limits        \
+            + fall          \
+            + time          \
+            + speed_y       \
+            + speed_z       \
+            + ang_speed_x   \
+            + ang_speed_y   \
+            + ang_speed_z
+
+
+
+            # print('\n')
+            # print("forward", forward, flush=True)
+            # print("lateral", lateral, flush=True)
+            # print("vertical", vertical, flush=True)
+            # print("x_rot", x_rot, flush=True)
+            # print("y_rot", y_rot, flush=True)
+            # print("z_rot", z_rot, flush=True)
+            # print("limits", limits, flush=True)
+            # print("fall", fall, flush=True)
+            # print("time", time, flush=True)
+            # print("speed_y", speed_y, flush=True)
+            # print("speed_z", speed_z, flush=True)
+            # print("ang_speed_x", ang_speed_x, flush=True)
+            # print("ang_speed_y", ang_speed_y, flush=True)
+            # print("ang_speed_z", ang_speed_z, flush=True)
+            # print("reward", reward)
+            # print('\n')
+
+
+            
 
             reward_values = \
             {
@@ -1012,85 +1069,126 @@ def main_process(file_path, id):
             }
 
 
-            return reward, reward_values
-
-        def step_cb(msg):
-            global step_cb_enable
-
-            global first
-            global got_state
-
-            global actual_joint_positions
-            global actual_pos
-            global actual_ori
-
-            global m2s
-            global s2m
-
-            global pos_shift_reg
-            global ori_shift_reg
-            global joint_positions_shift_reg
-
-            global original_pos
-            global original_ori
-
-            global cold_start
-
-            # print("mydebug - step callback called", flush=True)
+            return reward/10, reward_values
 
 
-            if step_cb_enable: # if the data is correct
-                # print("mydebug - enabled - step callback called!!!", flush=True)
+    def calc_core_velocities(actual_pos, actual_ori):
+        global prev_pos
+        global prev_ori
+        global dt
 
-                #wait until all the state variables are known
-                while not got_state:
-                    time.sleep(0.001)
-                    # print("waiting for state, now it's ", got_state, flush=True)
-                got_state = False
+        # diff_pos = abs(prev_pos - actual_pos)#the sign matters for the first element!!!!
+        # diff_ori = abs(prev_ori - actual_ori) #the sign doesnt matter, any difference is bad
 
-                pos_shift_reg = shift_elements(pos_shift_reg, actual_pos, 18, 3) #TODO generalize
-                ori_shift_reg = shift_elements(ori_shift_reg, actual_ori, 18, 3) #TODO generalize
-                joint_positions_shift_reg = shift_elements(joint_positions_shift_reg, actual_joint_positions, 60, 20)
+        diff_pos = [abs(a - b) for a, b in zip(prev_pos, actual_pos)]
+        diff_ori = [abs(a - b) for a, b in zip(prev_ori, actual_ori)]
 
-                state = [*pos_shift_reg, *ori_shift_reg, *joint_positions_shift_reg]
+        prev_pos = actual_pos
+        prev_ori = actual_ori
+
+        # speed = diff_pos / dt
+        speed = [a/dt for a in diff_pos]
+        # ang_speed = diff_ori / dt
+        ang_speed = [a/dt for a in diff_ori]
+
+        return speed, ang_speed
 
 
-                #at this point we have the state!!!!!!!!
-                if cold_start:
-                    cold_start = False
+    def calc_joint_velocities(actual_joint_positions):
+        global prev_joint_positions
 
-                    original_pos = actual_pos
-                    original_ori = actual_ori
+        # joint_velocities = prev_joint_positions - actual_joint_positions #its a state value so we don't alter it
+        joint_velocities = [abs(a - b) for a, b in zip(prev_joint_positions, actual_joint_positions)]
+        prev_joint_positions = actual_joint_positions #update the previous value for next calculation
+        return joint_velocities
 
-                    m2s.put(state)
-                    action = s2m.get()
 
-                    mapped_action = action[0].tolist()
-                    mapped_action = [x / 0.05 for x in mapped_action]
 
-                    action_packet = Float32MultiArray()
-                    action_packet.data = mapped_action
+
+    def step_cb(msg):
+        global step_cb_enable
+
+        global got_state
+
+        global actual_joint_positions
+        global actual_pos
+        global actual_ori
+
+        global prev_pos
+        global prev_ori
+        global prev_joint_positions
+
+        global actual_time
+
+        global m2s
+        global s2m
+
+        global pos_shift_reg
+        global ori_shift_reg
+        global joint_positions_shift_reg
+
+        global original_pos
+        global original_ori
+
+        global cold_start
+
+        global joint_velocities_shift_reg
+        global core_speed_shift_reg
+        global core_ang_speed_shift_reg
+        global dt
+
+
+        # print("mydebug - step callback called", flush=True)
+
+
+        if step_cb_enable: # if the data is correct
+            # print("mydebug - enabled - step callback called!!!", flush=True)
+
+            #wait until all the state variables are known
+            while not got_state:
+                time.sleep(0.001)
+                # print("waiting for state, now it's ", got_state, flush=True)
+            got_state = False
+
+            pos_shift_reg = shift_elements(pos_shift_reg, actual_pos, 9, 3) #TODO generalize
+            ori_shift_reg = shift_elements(ori_shift_reg, actual_ori, 9, 3) #TODO generalize
+            joint_positions_shift_reg = shift_elements(joint_positions_shift_reg, actual_joint_positions, 60, 20)
+
+            if cold_start:
+                #velocities are 0 at the start
+                speed = [0] * 3
+                ang_speed = [0] * 3
+                joint_velocities = [0] * 20
+            else:
+                speed, ang_speed = calc_core_velocities(actual_pos, actual_ori) #needs previous value for calculation
+                joint_velocities = calc_joint_velocities(actual_joint_positions)  #needs previous value for calculation
+
+            core_speed_shift_reg = shift_elements(core_speed_shift_reg, speed, 9, 3) 
+            core_ang_speed_shift_reg = shift_elements(core_ang_speed_shift_reg, speed, 9, 3) 
                 
-                    joint_publisher0.publish(action_packet)
-                    step_publisher.publish(Bool(True))
-                
-                    return
 
-                else:
-                    m2s.put(state)
+            joint_velocities_shift_reg = shift_elements(joint_velocities_shift_reg, joint_velocities, 60, 20)
 
-                    reward, reward_values = reward_function(actual_pos, actual_ori, actual_joint_positions)
-                    # q4.put(reward_values)
-                    # m2s.put(reward)
+            state = [*pos_shift_reg, *ori_shift_reg, *joint_positions_shift_reg, *core_speed_shift_reg, *core_ang_speed_shift_reg, *joint_velocities_shift_reg]
+            # 9 9 60 9 9 60 = 156
 
-                    achieved = is_it_done(actual_pos)
-                    fallen = is_fallen(actual_pos)
-                    done = fallen or achieved
-                    m2s.put(done)
-                    if done:
-                        return
 
-                    action = s2m.get()
+            #at this point we have the state!!!!!!!!
+            if cold_start:
+                cold_start = False
+
+                #original position needs to be saved for later reference
+                original_pos = actual_pos
+                original_ori = actual_ori
+
+                #in first call we save the state as previous state
+                prev_pos = actual_pos
+                prev_ori = actual_ori
+                prev_joint_positions = actual_joint_positions
+
+
+                m2s.put(state)
+                action = s2m.get()
 
                 mapped_action = action[0].tolist()
                 mapped_action = [x / 0.05 for x in mapped_action]
@@ -1100,14 +1198,46 @@ def main_process(file_path, id):
             
                 joint_publisher0.publish(action_packet)
                 step_publisher.publish(Bool(True))
-                # print("step publisher called\n", flush=True)
-                
+
+                # dt = actual_time
+                # print("dt = ", dt, flush=True)
+                dt = 0.05
+            
                 return
+
             else:
-                # print("mydebug - disabled - step callback called!!!", flush=True)
 
-                return
+                m2s.put(state)
+
+                reward, reward_values = reward_function(actual_time, actual_pos, actual_ori, actual_joint_positions, speed, ang_speed)
+                print("reward", reward)
+                # q4.put(reward_values)
+                # m2s.put(reward)
+
+                achieved = is_it_done(actual_pos)
+                fallen = is_fallen(actual_pos)
+                done = fallen or achieved
+                m2s.put(done)
+                if done:
+                    return
+
+                action = s2m.get()
+
+            mapped_action = action[0].tolist()
+            mapped_action = [x / 0.05 for x in mapped_action]
+
+            action_packet = Float32MultiArray()
+            action_packet.data = mapped_action
         
+            joint_publisher0.publish(action_packet)
+            step_publisher.publish(Bool(True))
+            # print("step publisher called\n", flush=True)
+            
+            return
+        else:
+            # print("mydebug - disabled - step callback called!!!", flush=True)
+
+            return
 
 
 
@@ -1115,96 +1245,110 @@ def main_process(file_path, id):
 
 
 
-        global pos_shift_reg 
-        pos_shift_reg = [0] * 18
-        global ori_shift_reg
-        ori_shift_reg = [0] * 18
-        global joint_positions_shift_reg
-        joint_positions_shift_reg = [0] * 60
 
-        pause_flag = True
-        sim_state = Float32MultiArray()
+    global pos_shift_reg 
+    pos_shift_reg = [0] * 9
 
-        processes = []
+    global ori_shift_reg
+    ori_shift_reg = [0] * 9
 
-        # mp.set_start_method('spawn')
-        global m2s
-        m2s = mp.Queue()
-        global s2m
-        s2m = mp.Queue()
+    global joint_positions_shift_reg
+    joint_positions_shift_reg = [0] * 60
 
-        # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m), daemon=True)
-        # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
-        p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
-        processes.append(p1)
-        # p1 = Process(target=joint_control, args=(q1,))
-        p1.start()
+    global joint_velocities_shift_reg
+    joint_velocities_shift_reg = [0] * 60
 
+    global core_speed_shift_reg
+    core_speed_shift_reg = [0] * 9
 
-        # q2 = Queue()
-        # p2 = Process(target=process_image, args=(q2,))
-        #processes.append(p2)
-        # p2.start()
-
-        # q3 = Queue()
-        # p3 = Process(target=graph_state, args=[])
-        # processes.append(p3)
-        # p3.start()
-
-        # q4 = Queue()
-        # p4 = Process(target=graph_current_reward, args=[q4,])
-        # processes.append(p4)
-        # p4.start()
-
-        # p5 = Process(target=graph_windowed_reward, args=[q4,])
-        # processes.append(p5)
-        # p5.start()
-        
-        rospy.init_node('hugo_main' + str(id))
-        q_size = 1
-
-        sync_publisher = rospy.Publisher("/enableSyncMode" + str(id), Bool, queue_size=q_size)#, latch=True)
-        start_publisher = rospy.Publisher("/startSimulation" + str(id), Bool, queue_size=q_size)#, latch=True)
-        stop_publisher = rospy.Publisher("/stopSimulation" + str(id), Bool, queue_size=q_size)#, latch=True)
-        step_publisher = rospy.Publisher("/triggerNextStep" + str(id), Bool, queue_size=q_size)#, latch=True)
-        puse_publisher = rospy.Publisher("/pauseSimulation" + str(id), Bool, queue_size=q_size)
-        joint_publisher0 = rospy.Publisher('/action' + str(id), Float32MultiArray, queue_size=q_size)
+    global core_ang_speed_shift_reg
+    core_ang_speed_shift_reg = [0] * 9
 
 
 
-        rospy.Subscriber("/simulationState" + str(id), Int32, simState_cb)
-        rospy.Subscriber("/state" + str(id), Float32MultiArray, state_cb, queue_size = q_size)
-        rospy.Subscriber("/simulationStepDone" + str(id), Bool, step_cb, queue_size = q_size)#, latch=True)
-        
-        time.sleep(0.1) #original value 5
-        
-        rate = rospy.Rate(10)
+    pause_flag = True
+    sim_state = Float32MultiArray()
 
-        time.sleep(0.5)
-        print("initialization done", flush=True)
+    processes = []
 
+    # mp.set_start_method('spawn')
+    global m2s
+    m2s = mp.Queue()
+    global s2m
+    s2m = mp.Queue()
 
-        # z.data = True
-
-        signal.signal(signal.SIGINT, sigint_handler)
-        signal.signal(signal.SIGQUIT, sigquit_handler)
-        signal.signal(signal.SIGALRM, sigalrm_handler)
-
-        # signal.signal(signal.SIGSTOP, sigstop_handler) #TODO
-
-        # time.sleep(2) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m), daemon=True)
+    # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
+    p1 = mp.Process(target=joint_control_td3, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
+    processes.append(p1)
+    # p1 = Process(target=joint_control, args=(q1,))
+    p1.start()
 
 
-        print("main thread", flush=True)
+    # q2 = Queue()
+    # p2 = Process(target=process_image, args=(q2,))
+    #processes.append(p2)
+    # p2.start()
 
-        prev_state = 0
-        counter = 0
+    # q3 = Queue()
+    # p3 = Process(target=graph_state, args=[])
+    # processes.append(p3)
+    # p3.start()
 
-        rate = rospy.Rate(10)
+    # q4 = Queue()
+    # p4 = Process(target=graph_current_reward, args=[q4,])
+    # processes.append(p4)
+    # p4.start()
 
-        while not rospy.is_shutdown():
+    # p5 = Process(target=graph_windowed_reward, args=[q4,])
+    # processes.append(p5)
+    # p5.start()
 
-            rate.sleep()
+    rospy.init_node('hugo_main' + str(id))
+    q_size = 1
+
+    sync_publisher = rospy.Publisher("/enableSyncMode" + str(id), Bool, queue_size=q_size)#, latch=True)
+    start_publisher = rospy.Publisher("/startSimulation" + str(id), Bool, queue_size=q_size)#, latch=True)
+    stop_publisher = rospy.Publisher("/stopSimulation" + str(id), Bool, queue_size=q_size)#, latch=True)
+    step_publisher = rospy.Publisher("/triggerNextStep" + str(id), Bool, queue_size=q_size)#, latch=True)
+    puse_publisher = rospy.Publisher("/pauseSimulation" + str(id), Bool, queue_size=q_size)
+    joint_publisher0 = rospy.Publisher('/action' + str(id), Float32MultiArray, queue_size=q_size)
+
+
+
+    rospy.Subscriber("/simulationState" + str(id), Int32, simState_cb)
+    rospy.Subscriber("/state" + str(id), Float32MultiArray, state_cb, queue_size = q_size)
+    rospy.Subscriber("/simulationStepDone" + str(id), Bool, step_cb, queue_size = q_size)#, latch=True)
+
+    time.sleep(0.1) #original value 5
+
+    rate = rospy.Rate(10)
+
+    time.sleep(0.5)
+    print("initialization done", flush=True)
+
+
+    # z.data = True
+
+    signal.signal(signal.SIGINT, sigint_handler)
+    signal.signal(signal.SIGQUIT, sigquit_handler)
+    signal.signal(signal.SIGALRM, sigalrm_handler)
+
+    # signal.signal(signal.SIGSTOP, sigstop_handler) #TODO
+
+    # time.sleep(2) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+    print("main thread", flush=True)
+
+    prev_state = 0
+    counter = 0
+
+    rate = rospy.Rate(10)
+
+    while not rospy.is_shutdown():
+
+        rate.sleep()
 
 
 
@@ -1246,7 +1390,7 @@ if __name__ == '__main__':
 
 
 
-    i = 9
+    i = 4
 
     # num_instances = 1
 
