@@ -39,6 +39,10 @@ import subprocess
 # import multiprocessing
 import sys
 
+import re
+
+import csv
+
 
 cold_start = False
 
@@ -205,11 +209,13 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
 
 
 
-def joint_control_ddpg(m2s, s2m, pid, file_path, id):
+def joint_control_ddpg(m2s, s2m, pid, controller_output_file_path, controller_output_folder_path,  id):
+    print("Controller process with id = ", id, "started", flush=True)
+    # print("debug - controller output file path = ", controller_output_file_path)
 
-    with open(file_path, 'w') as f:
+    with open(controller_output_file_path, 'w') as f:
         sys.stdout = f
-
+        print("File output testing", flush=True)
         class Coppelia:
             def __init__(self):
                 # rospy.init_node('hugo_vision' + str(id))
@@ -228,8 +234,8 @@ def joint_control_ddpg(m2s, s2m, pid, file_path, id):
         agent = Agent_ddpg(id, alpha=0.0001, beta=0.001, 
                         input_dims=env.observation_space.shape, tau=0.001,
                         batch_size=64, fc1_dims=800, fc2_dims=600, fc3_dims=400,
-                        n_actions=env.action_space.shape[0])
-        n_games = 10000
+                        n_actions=env.action_space.shape[0], chkpt_dir=controller_output_folder_path)
+        n_games = 12000
         filename = "" \
             + 'Coppelia' + '_' \
             + 'ddpg' + '_' \
@@ -237,14 +243,23 @@ def joint_control_ddpg(m2s, s2m, pid, file_path, id):
             + 'beta' +  str(agent.beta) + '_' \
             + 'games' + str(n_games) + '_' \
             + 'fc1_' + str(agent.fc1_dims) + '_' \
-            + 'fc2_' + str(agent.fc2_dims)
+            + 'fc2_' + str(agent.fc2_dims) + '_' \
+            + 'fc3_' + str(agent.fc3_dims)
         
-        figure_file = 'plots/' + filename + '_' + str(id) + '.png'
+        figure_file = controller_output_folder_path + "/plots/" + filename + '_' + str(id) + '.png'
+        step_rewards_file = controller_output_folder_path + "/rewards/step_rewards/" + filename + '_' + str(id) + '.csv'
+        episode_rewards_file = controller_output_folder_path + "/rewards/episode_rewards/" + filename + '_' + str(id) + '.csv'
+        average_rewards_file = controller_output_folder_path + "/rewards/average_rewards/" + filename + '_' + str(id) + '.csv'
 
-        best_score = -30
+        #step_rewards_figure = controller_output_folder_path + "/rewards/step_rewards/" + filename + '_' + str(id) + '.csv'
+        #episode_rewards_figure = controller_output_folder_path + "/rewards/episode_rewards/" + filename + '_' + str(id) + '.csv'
+        #average_rewards_figure = controller_output_folder_path + "/rewards/average_rewards/" + filename + '_' + str(id) + '.csv'
+
+        best_score = -1000
         score_history = []
-
-
+        step_reward_history = []
+        episode_reward_history = []
+        average_reward_history = [] 
 
 
         for i in range(n_games):
@@ -259,18 +274,18 @@ def joint_control_ddpg(m2s, s2m, pid, file_path, id):
 
                 observation_ = m2s.get()
                 reward = m2s.get()
+                step_reward_history.append(reward)
                 done = m2s.get()
-
 
                 agent.remember(observation, action, reward, observation_, done)
                 agent.learn()
                 score += reward
                 observation = observation_
 
-
-
+            episode_reward_history.append(score)
             score_history.append(score)
             avg_score = np.mean(score_history[-100:])
+            average_reward_history.append(avg_score)
 
             if avg_score > best_score:
                 best_score = avg_score
@@ -278,8 +293,26 @@ def joint_control_ddpg(m2s, s2m, pid, file_path, id):
 
             print('episode ', i, 'score %.1f' % score,
                     'average score %.1f' % avg_score, flush=True)
+
+        agent.save_models("_last")
         x = [i+1 for i in range(n_games)]
         plc_ddpg(x, score_history, figure_file)
+
+        with open(step_rewards_file, 'w') as f:
+            write = csv.writer(f)
+            write.writerow(step_reward_history)
+
+        with open(episode_rewards_file, 'w') as f:
+            write = csv.writer(f)
+            write.writerow(episode_reward_history)
+
+        with open(average_rewards_file, 'w') as f:
+            write = csv.writer(f)
+            write.writerow(average_reward_history)
+
+        os.kill(pid, signal.SIGINT)
+        print("kill signal sent!", flush=True)
+        exit()
 
 #------------------------------------------------------------------------------------------------------------
 
@@ -736,8 +769,15 @@ def graph_current_reward(q):
 #------------------------------------------------------------------------------------------------------------
 
 
-def main_process(file_path1, file_path2, id):
-    with open(file_path1, 'w') as f:
+def main_process(
+        pid, 
+        interface_output_file_path, 
+        controller_output_file_path, 
+        controller_output_folder_path,  
+        id
+        ):
+    print("Interface process with id = ", id, "created!", flush=True)
+    with open(interface_output_file_path, 'w') as f:
         sys.stdout = f
         first = 1
 
@@ -764,7 +804,6 @@ def main_process(file_path1, file_path2, id):
             lst = new_elements + lst
             return lst
 
-
         def map_to_discrete_range(value):
             input_min, input_max = -1, 1
             output_min, output_max = -1, 1
@@ -780,7 +819,6 @@ def main_process(file_path1, file_path2, id):
             
             return discrete_value
 
-        #Ctrl-C handling
         def sigint_handler(*args):
             print("\n exiting!!!", flush=True)
             stop_publisher.publish(Bool(True))
@@ -790,6 +828,7 @@ def main_process(file_path1, file_path2, id):
                 p.join()
 
             print("Processes should be joined by now", flush=True)
+            os.kill(pid, signal.SIGALRM)
             exit(0)
 
         def sigquit_handler(*args):
@@ -1063,7 +1102,6 @@ def main_process(file_path1, file_path2, id):
 
             return reward/10, reward_values
         
-
         def calc_core_velocities(actual_pos, actual_ori):
             global prev_pos
             global prev_ori
@@ -1085,7 +1123,6 @@ def main_process(file_path1, file_path2, id):
 
             return speed, ang_speed
         
-
         def calc_joint_velocities(actual_joint_positions):
             global prev_joint_positions
 
@@ -1093,9 +1130,6 @@ def main_process(file_path1, file_path2, id):
             joint_velocities = [abs(a - b) for a, b in zip(prev_joint_positions, actual_joint_positions)]
             prev_joint_positions = actual_joint_positions #update the previous value for next calculation
             return joint_velocities
-
-
-
 
         def step_cb(msg):
             global step_cb_enable
@@ -1232,11 +1266,6 @@ def main_process(file_path1, file_path2, id):
         
 
 
-
-
-
-
-
         global pos_shift_reg 
         pos_shift_reg = [0] * 9
 
@@ -1269,11 +1298,19 @@ def main_process(file_path1, file_path2, id):
 
         # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m), daemon=True)
         # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
-        p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid(), file_path2, id), daemon=True)
+        p1 = mp.Process(
+            target=joint_control_ddpg, 
+            args=(
+                m2s, 
+                s2m, 
+                os.getpid(), 
+                controller_output_file_path, 
+                controller_output_folder_path, 
+                id), 
+            daemon=True)
         processes.append(p1)
         # p1 = Process(target=joint_control, args=(q1,))
         p1.start()
-
 
         # q2 = Queue()
         # p2 = Process(target=process_image, args=(q2,))
@@ -1304,8 +1341,6 @@ def main_process(file_path1, file_path2, id):
         puse_publisher = rospy.Publisher("/pauseSimulation" + str(id), Bool, queue_size=q_size)
         joint_publisher0 = rospy.Publisher('/action' + str(id), Float32MultiArray, queue_size=q_size)
 
-
-
         rospy.Subscriber("/simulationState" + str(id), Int32, simState_cb)
         rospy.Subscriber("/state" + str(id), Float32MultiArray, state_cb, queue_size = q_size)
         rospy.Subscriber("/simulationStepDone" + str(id), Bool, step_cb, queue_size = q_size)#, latch=True)
@@ -1317,44 +1352,74 @@ def main_process(file_path1, file_path2, id):
         time.sleep(0.5)
         print("initialization done", flush=True)
 
-
-        # z.data = True
-
         signal.signal(signal.SIGINT, sigint_handler)
         signal.signal(signal.SIGQUIT, sigquit_handler)
         signal.signal(signal.SIGALRM, sigalrm_handler)
 
-        # signal.signal(signal.SIGSTOP, sigstop_handler) #TODO
-
-        # time.sleep(2) #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
         print("main thread", flush=True)
 
-        prev_state = 0
-        counter = 0
-
         rate = rospy.Rate(10)
-
         while not rospy.is_shutdown():
-
             rate.sleep()
 
 
 
 
 
-
-
-
+def create_next_run_folder(path):
+    # Regular expression to match "run" followed by a number
+    pattern = re.compile(r'^run(\d+)$')
+    
+    highest_number = -1
+    
+    # Check if the path exists
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"The specified path does not exist: {path}")
+    
+    # Iterate over the items in the directory
+    for dir_name in os.listdir(path):
+        # Check if the directory name matches the pattern
+        match = pattern.match(dir_name)
+        if match:
+            # Extract the number and convert to integer
+            number = int(match.group(1))
+            # Update the highest number if necessary
+            if number > highest_number:
+                highest_number = number
+    
+    # Increment the highest number by one for the new folder name
+    next_number = highest_number + 1
+    new_folder_name = f"run{next_number}"
+    new_folder_path = os.path.join(path, new_folder_name)
+    
+    # Create the new folder
+    os.makedirs(new_folder_path)
+    os.makedirs(new_folder_path + "/simulator")
+    os.makedirs(new_folder_path + "/interface")
+    os.makedirs(new_folder_path + "/controller")
+    os.makedirs(new_folder_path + "/controller/plots")
+    os.makedirs(new_folder_path + "/controller/rewards/step_rewards")
+    os.makedirs(new_folder_path + "/controller/rewards/episode_rewards")
+    os.makedirs(new_folder_path + "/controller/rewards/average_rewards")
+    os.makedirs(new_folder_path + "/controller/checkpoints")
+    os.makedirs(new_folder_path + "/controller/checkpoints/last")
+    os.makedirs(new_folder_path + "/controller/checkpoints/best")
+    
+    print("\nOutput folder: " + new_folder_path + " created", flush=True)
+    return new_folder_path
 
 
 
 if __name__ == '__main__':
+
+    counter = 0
+
     mp.set_start_method('spawn')
 
+
     def sigint_handler(*args):
-        print("you pressed ctrl+c")
+        print("Shutting down the processes", flush=True)
+        time.sleep(1)
 
         for process, filename in simulator_processes:
             os.killpg(os.getpgid(process.pid), signal.SIGTERM)
@@ -1375,8 +1440,31 @@ if __name__ == '__main__':
         print("All processes have been terminated.")
         exit(0)
 
+    def sigalrm_handler(*args):
+        global counter
+        # print("sigalarm received", flush=True)
+
+        counter += 1
+        if counter == num_instances:
+
+            for process, filename in simulator_processes:
+                os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                # os.kill(process.pid, signal.SIGTERM)
+                # print("pid", process.pid)
+                # process.kill()
+                
+                # process.terminate()  # Terminate the process
+                process.wait()       # Wait for the process to terminate
+                if process.returncode is not None:
+                    print(f"Process writing to {filename} terminated with return code {process.returncode}")
+
+            exit()
+
 
     signal.signal(signal.SIGINT, sigint_handler)
+    signal.signal(signal.SIGALRM, sigalrm_handler)
+
+    #-------------------------------------------------------------------------------------
 
     num_instances = 10
 
@@ -1385,33 +1473,39 @@ if __name__ == '__main__':
         command = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh -h -gparam1=" + str(i) + " -GROSInterface.nodeName=MyNodeName" + str(i) + " /home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
         bash_commands.append(command)
 
-    # for command in bash_commands:
-    #     print(command)
+    path = "/home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/results"
+    base_folder = create_next_run_folder(path)
 
 
-    # List to hold process objects
+    print("\nStarting simulator processes", flush=True)
     simulator_processes = []
-
-    # Loop through the commands and start each process
     for i, command in enumerate(bash_commands):
-        # Open a file for each process's output
-        with open(f"output_logs/output_{i+1}.txt", "w") as outfile:
-
+        with open(base_folder + f"/simulator/sim_out_{i}.txt", "w") as outfile:
             arguments = command.split()
-  
             process = subprocess.Popen([arguments[0]] + arguments[1:], shell=False, stdout=outfile, stderr=outfile, preexec_fn=os.setsid)
-            simulator_processes.append((process, f"output_logs/output_{i+1}.txt"))
+            simulator_processes.append((process, f"/simulator/sim_out_{i}.txt"))
 
+    print("Simulators started", flush=True)
     time.sleep(7)
 
+
+    print("\nStarting controller processes", flush=True)
     main_processes = []
-    for i in range(num_instances):
-        file_path1 = "output_logs/output_main" + str(i) +".txt"
-        file_path2 = "output_logs/output_torch" + str(i) +".txt"
-        p = mp.Process(target=main_process, args=(file_path1, file_path2, i))
+    for idx in range(num_instances):
+        interface_output_file_path      = base_folder + "/interface/int_out_" + str(idx) +".txt"
+        controller_output_file_path     = base_folder +  "/controller/cont_out_" + str(idx) +".txt"
+        controller_output_folder_path   = base_folder +  "/controller/"
+        p = mp.Process(target=main_process, args=
+                       (
+                        os.getpid(), 
+                        interface_output_file_path, 
+                        controller_output_file_path, 
+                        controller_output_folder_path, 
+                        idx
+                        ))
         main_processes.append(p)
         p.start()
-
+    print("Controllers started", flush=True)
 
     while True:
         time.sleep(1)

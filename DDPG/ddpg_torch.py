@@ -9,7 +9,7 @@ from .buffer import ReplayBuffer
 class Agent():
     def __init__(self, id, alpha, beta, input_dims, tau, n_actions, gamma=0.99,
                  max_size=1000000, fc1_dims=400, fc2_dims=300, fc3_dims=400,
-                 batch_size=64):
+                 batch_size=64, chkpt_dir=''):
         self.gamma = gamma
         self.tau = tau
         self.batch_size = batch_size
@@ -19,21 +19,23 @@ class Agent():
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
         self.fc3_dims = fc3_dims
+        self.chkpt_dir= chkpt_dir
+        print("Agent ckptdir", self.chkpt_dir, flush=True)
 
         self.memory = ReplayBuffer(max_size, input_dims, n_actions)
 
         self.noise = OUActionNoise(mu=np.zeros(n_actions))
 
         self.actor = ActorNetwork(id, alpha, input_dims, fc1_dims, fc2_dims, fc3_dims=400,
-                                n_actions=n_actions, name='actor')
+                                n_actions=n_actions, name='actor', chkpt_dir=self.chkpt_dir)
         self.critic = CriticNetwork(id, beta, input_dims, fc1_dims, fc2_dims, fc3_dims=400,
-                                n_actions=n_actions, name='critic')
+                                n_actions=n_actions, name='critic', chkpt_dir=self.chkpt_dir)
 
         self.target_actor = ActorNetwork(id, alpha, input_dims, fc1_dims, fc2_dims, fc3_dims=400,
-                                n_actions=n_actions, name='target_actor')
+                                n_actions=n_actions, name='target_actor', chkpt_dir=self.chkpt_dir)
 
         self.target_critic = CriticNetwork(id, beta, input_dims, fc1_dims, fc2_dims, fc3_dims=400,
-                                n_actions=n_actions, name='target_critic')
+                                n_actions=n_actions, name='target_critic', chkpt_dir=self.chkpt_dir)
 
         self.update_network_parameters(tau=1)
 
@@ -60,17 +62,17 @@ class Agent():
     def remember(self, state, action, reward, state_, done):
         self.memory.store_transition(state, action, reward, state_, done)
 
-    def save_models(self):
-        self.actor.save_checkpoint()
-        self.target_actor.save_checkpoint()
-        self.critic.save_checkpoint()
-        self.target_critic.save_checkpoint()
+    def save_models(self, extension=''):
+        self.actor.save_checkpoint(extension)
+        self.target_actor.save_checkpoint(extension)
+        self.critic.save_checkpoint(extension)
+        self.target_critic.save_checkpoint(extension)
 
-    def load_models(self):
-        self.actor.load_checkpoint()
-        self.target_actor.load_checkpoint()
-        self.critic.load_checkpoint()
-        self.target_critic.load_checkpoint()
+    def load_models(self, extension=''):
+        self.actor.load_checkpoint(extension)
+        self.target_actor.load_checkpoint(extension)
+        self.critic.load_checkpoint(extension)
+        self.target_critic.load_checkpoint(extension)
 
     def learn(self):
         if self.memory.mem_cntr < self.batch_size:
