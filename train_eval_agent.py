@@ -237,7 +237,7 @@ def joint_control_ddpg(train, m2s, s2m, pid, controller_output_file_path, contro
                         n_actions=env.action_space.shape[0], chkpt_dir=controller_output_folder_path)
         
         if train:
-            n_games = 20000
+            n_games = 5000
 
             filename = "" \
             + 'Coppelia' + '_' \
@@ -1007,7 +1007,7 @@ def main_process(
             azo = actual_ori[2]
 
 
-            forward_weight = 60
+            forward_weight = 100
             lateral_weigth = 10
             vertical_weigth = 5
 
@@ -1486,7 +1486,7 @@ if __name__ == '__main__':
 
     #-------------------------------------------------------------------------------------
 
-    train = False
+    train = True
 
     if train:
 
