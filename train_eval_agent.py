@@ -20,11 +20,11 @@ import matplotlib.pyplot as plt
 import random
 import matplotlib.pyplot as plt
 import numpy as np
-from ddpg import DDPG
+# from ddpg import DDPG
 import logging
 import torch
-from utils.replay_memory import ReplayMemory, Transition
-from utils.noise import OrnsteinUhlenbeckActionNoise
+# from utils.replay_memory import ReplayMemory, Transition
+# from utils.noise import OrnsteinUhlenbeckActionNoise
 from torch.utils.tensorboard import SummaryWriter
 import torch.multiprocessing as mp
 import os
@@ -209,7 +209,7 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
 
 
 
-def joint_control_ddpg(m2s, s2m, pid, controller_output_file_path, controller_output_folder_path,  id):
+def joint_control_ddpg(train, m2s, s2m, pid, controller_output_file_path, controller_output_folder_path,  id):
     print("Controller process with id = ", id, "started", flush=True)
     # print("debug - controller output file path = ", controller_output_file_path)
 
@@ -235,8 +235,11 @@ def joint_control_ddpg(m2s, s2m, pid, controller_output_file_path, controller_ou
                         input_dims=env.observation_space.shape, tau=0.001,
                         batch_size=64, fc1_dims=800, fc2_dims=600, fc3_dims=400,
                         n_actions=env.action_space.shape[0], chkpt_dir=controller_output_folder_path)
-        n_games = 12000
-        filename = "" \
+        
+        if train:
+            n_games = 20000
+
+            filename = "" \
             + 'Coppelia' + '_' \
             + 'ddpg' + '_' \
             + 'alpha' + str(agent.alpha) + '_' \
@@ -245,21 +248,25 @@ def joint_control_ddpg(m2s, s2m, pid, controller_output_file_path, controller_ou
             + 'fc1_' + str(agent.fc1_dims) + '_' \
             + 'fc2_' + str(agent.fc2_dims) + '_' \
             + 'fc3_' + str(agent.fc3_dims)
-        
-        figure_file = controller_output_folder_path + "/plots/" + filename + '_' + str(id) + '.png'
-        step_rewards_file = controller_output_folder_path + "/rewards/step_rewards/" + filename + '_' + str(id) + '.csv'
-        episode_rewards_file = controller_output_folder_path + "/rewards/episode_rewards/" + filename + '_' + str(id) + '.csv'
-        average_rewards_file = controller_output_folder_path + "/rewards/average_rewards/" + filename + '_' + str(id) + '.csv'
 
+            figure_file = controller_output_folder_path + "/plots/" + filename + '_' + str(id) + '.png'
+            step_rewards_file = controller_output_folder_path + "/rewards/step_rewards/" + filename + '_' + str(id) + '.csv'
+            episode_rewards_file = controller_output_folder_path + "/rewards/episode_rewards/" + filename + '_' + str(id) + '.csv'
+            average_rewards_file = controller_output_folder_path + "/rewards/average_rewards/" + filename + '_' + str(id) + '.csv'
+            best_score = -1000
+            score_history = []
+            step_reward_history = []
+            episode_reward_history = []
+            average_reward_history = [] 
+        else:
+            agent.load_models(extension="")
+            n_games = 10
+        
         #step_rewards_figure = controller_output_folder_path + "/rewards/step_rewards/" + filename + '_' + str(id) + '.csv'
         #episode_rewards_figure = controller_output_folder_path + "/rewards/episode_rewards/" + filename + '_' + str(id) + '.csv'
         #average_rewards_figure = controller_output_folder_path + "/rewards/average_rewards/" + filename + '_' + str(id) + '.csv'
 
-        best_score = -1000
-        score_history = []
-        step_reward_history = []
-        episode_reward_history = []
-        average_reward_history = [] 
+       
 
 
         for i in range(n_games):
@@ -267,48 +274,57 @@ def joint_control_ddpg(m2s, s2m, pid, controller_output_file_path, controller_ou
 
             done = False
             score = 0
-            agent.noise.reset()
+
+            if train:
+                agent.noise.reset()
+
             while not done:
                 action = agent.choose_action(observation)
                 s2m.put([torch.tensor(action)])
-
                 observation_ = m2s.get()
-                reward = m2s.get()
-                step_reward_history.append(reward)
+
+                if train:
+                    reward = m2s.get()
+                    step_reward_history.append(reward)
+
                 done = m2s.get()
 
-                agent.remember(observation, action, reward, observation_, done)
-                agent.learn()
-                score += reward
+                if train:
+                    agent.remember(observation, action, reward, observation_, done)
+                    agent.learn()
+                    score += reward
                 observation = observation_
 
-            episode_reward_history.append(score)
-            score_history.append(score)
-            avg_score = np.mean(score_history[-100:])
-            average_reward_history.append(avg_score)
 
-            if avg_score > best_score:
-                best_score = avg_score
-                agent.save_models()
+            if train:
+                episode_reward_history.append(score)
+                score_history.append(score)
+                avg_score = np.mean(score_history[-100:])
+                average_reward_history.append(avg_score)
 
-            print('episode ', i, 'score %.1f' % score,
-                    'average score %.1f' % avg_score, flush=True)
+                if avg_score > best_score:
+                    best_score = avg_score
+                    agent.save_models()
 
-        agent.save_models("_last")
-        x = [i+1 for i in range(n_games)]
-        plc_ddpg(x, score_history, figure_file)
+                print('episode ', i, 'score %.1f' % score,
+                        'average score %.1f' % avg_score, flush=True)
 
-        with open(step_rewards_file, 'w') as f:
-            write = csv.writer(f)
-            write.writerow(step_reward_history)
+        if train:
+            agent.save_models("_last")
+            x = [i+1 for i in range(n_games)]
+            plc_ddpg(x, score_history, figure_file)
 
-        with open(episode_rewards_file, 'w') as f:
-            write = csv.writer(f)
-            write.writerow(episode_reward_history)
+            with open(step_rewards_file, 'w') as f:
+                write = csv.writer(f)
+                write.writerow(step_reward_history)
 
-        with open(average_rewards_file, 'w') as f:
-            write = csv.writer(f)
-            write.writerow(average_reward_history)
+            with open(episode_rewards_file, 'w') as f:
+                write = csv.writer(f)
+                write.writerow(episode_reward_history)
+
+            with open(average_rewards_file, 'w') as f:
+                write = csv.writer(f)
+                write.writerow(average_reward_history)
 
         os.kill(pid, signal.SIGINT)
         print("kill signal sent!", flush=True)
@@ -770,10 +786,12 @@ def graph_current_reward(q):
 
 
 def main_process(
+        train,
         pid, 
         interface_output_file_path, 
         controller_output_file_path, 
         controller_output_folder_path,  
+        ros_id,
         id
         ):
     print("Interface process with id = ", id, "created!", flush=True)
@@ -1237,7 +1255,8 @@ def main_process(
 
                     reward, reward_values = reward_function(actual_time, actual_pos, actual_ori, actual_joint_positions, speed, ang_speed)
                     # q4.put(reward_values)
-                    m2s.put(reward)
+                    if train:
+                        m2s.put(reward)
 
                     achieved = is_it_done(actual_pos)
                     fallen = is_fallen(actual_pos)
@@ -1301,6 +1320,7 @@ def main_process(
         p1 = mp.Process(
             target=joint_control_ddpg, 
             args=(
+                train,
                 m2s, 
                 s2m, 
                 os.getpid(), 
@@ -1331,19 +1351,19 @@ def main_process(
         # processes.append(p5)
         # p5.start()
         
-        rospy.init_node('hugo_main' + str(id))
+        rospy.init_node('hugo_main' + str(ros_id))
         q_size = 1
 
-        sync_publisher = rospy.Publisher("/enableSyncMode" + str(id), Bool, queue_size=q_size)#, latch=True)
-        start_publisher = rospy.Publisher("/startSimulation" + str(id), Bool, queue_size=q_size)#, latch=True)
-        stop_publisher = rospy.Publisher("/stopSimulation" + str(id), Bool, queue_size=q_size)#, latch=True)
-        step_publisher = rospy.Publisher("/triggerNextStep" + str(id), Bool, queue_size=q_size)#, latch=True)
-        puse_publisher = rospy.Publisher("/pauseSimulation" + str(id), Bool, queue_size=q_size)
-        joint_publisher0 = rospy.Publisher('/action' + str(id), Float32MultiArray, queue_size=q_size)
+        sync_publisher = rospy.Publisher("/enableSyncMode" + str(ros_id), Bool, queue_size=q_size)#, latch=True)
+        start_publisher = rospy.Publisher("/startSimulation" + str(ros_id), Bool, queue_size=q_size)#, latch=True)
+        stop_publisher = rospy.Publisher("/stopSimulation" + str(ros_id), Bool, queue_size=q_size)#, latch=True)
+        step_publisher = rospy.Publisher("/triggerNextStep" + str(ros_id), Bool, queue_size=q_size)#, latch=True)
+        puse_publisher = rospy.Publisher("/pauseSimulation" + str(ros_id), Bool, queue_size=q_size)
+        joint_publisher0 = rospy.Publisher('/action' + str(ros_id), Float32MultiArray, queue_size=q_size)
 
-        rospy.Subscriber("/simulationState" + str(id), Int32, simState_cb)
-        rospy.Subscriber("/state" + str(id), Float32MultiArray, state_cb, queue_size = q_size)
-        rospy.Subscriber("/simulationStepDone" + str(id), Bool, step_cb, queue_size = q_size)#, latch=True)
+        rospy.Subscriber("/simulationState" + str(ros_id), Int32, simState_cb)
+        rospy.Subscriber("/state" + str(ros_id), Float32MultiArray, state_cb, queue_size = q_size)
+        rospy.Subscriber("/simulationStepDone" + str(ros_id), Bool, step_cb, queue_size = q_size)#, latch=True)
         
         time.sleep(0.1) #original value 5
         
@@ -1466,47 +1486,116 @@ if __name__ == '__main__':
 
     #-------------------------------------------------------------------------------------
 
-    num_instances = 10
+    train = False
 
-    bash_commands = []
-    for i in range(num_instances):
-        command = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh -h -gparam1=" + str(i) + " -GROSInterface.nodeName=MyNodeName" + str(i) + " /home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
-        bash_commands.append(command)
+    if train:
 
-    path = "/home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/results"
-    base_folder = create_next_run_folder(path)
+        num_instances = 10
+
+        bash_commands = []
+        for i in range(num_instances):
+            command = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh -h -gparam1=" + str(i) + " -GROSInterface.nodeName=MyNodeName" + str(i) + " /home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
+            bash_commands.append(command)
+
+        path = "/home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/results"
+        base_folder = create_next_run_folder(path)
 
 
-    print("\nStarting simulator processes", flush=True)
-    simulator_processes = []
-    for i, command in enumerate(bash_commands):
-        with open(base_folder + f"/simulator/sim_out_{i}.txt", "w") as outfile:
+        print("\nStarting simulator processes", flush=True)
+        simulator_processes = []
+        for i, command in enumerate(bash_commands):
+            with open(base_folder + f"/simulator/sim_out_{i}.txt", "w") as outfile:
+                arguments = command.split()
+                process = subprocess.Popen([arguments[0]] + arguments[1:], shell=False, stdout=outfile, stderr=outfile, preexec_fn=os.setsid)
+                simulator_processes.append((process, f"/simulator/sim_out_{i}.txt"))
+
+        print("Simulators started", flush=True)
+        time.sleep(7)
+
+
+        print("\nStarting controller processes", flush=True)
+        main_processes = []
+        for id in range(num_instances):
+            interface_output_file_path      = base_folder + "/interface/int_out_" + str(id) +".txt"
+            controller_output_file_path     = base_folder +  "/controller/cont_out_" + str(id) +".txt"
+            controller_output_folder_path   = base_folder +  "/controller/"
+            p = mp.Process(target=main_process, args=
+                        (
+                            train,
+                            os.getpid(), 
+                            interface_output_file_path, 
+                            controller_output_file_path, 
+                            controller_output_folder_path, 
+                            id,
+                            id
+                            ))
+            main_processes.append(p)
+            p.start()
+        print("Controllers started", flush=True)
+
+        while True:
+            time.sleep(1)
+    else:
+        num_instances = 1
+
+        #which run to evaluate
+        run = 12
+
+        #name for ros node and channel creation
+        ros_id = 99
+
+        #which agent to evaluate
+        id = 8
+
+        base_folder = "/home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/results/run" + str(run)
+
+        # num_instances = 1
+
+        # bash_commands = []
+        # for i in range(num_instances):
+
+        command = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh -gparam1=" + str(ros_id) + " -GROSInterface.nodeName=MyNodeName" + str(ros_id) + " /home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
+        # bash_commands.append(command)
+
+        # for command in bash_commands:
+        #     print(command)
+
+
+        # List to hold process objects
+        simulator_processes = []
+
+        # Loop through the commands and start each process
+        # for i, command in enumerate(bash_commands):
+        #     # Open a file for each process's output
+        with open(base_folder + f"/simulator/sim_out_eval{id}.txt", "w") as outfile:
             arguments = command.split()
             process = subprocess.Popen([arguments[0]] + arguments[1:], shell=False, stdout=outfile, stderr=outfile, preexec_fn=os.setsid)
-            simulator_processes.append((process, f"/simulator/sim_out_{i}.txt"))
+            simulator_processes.append((process, f"/simulator/sim_out_eval{id}.txt"))
 
-    print("Simulators started", flush=True)
-    time.sleep(7)
+        time.sleep(7)
 
-
-    print("\nStarting controller processes", flush=True)
-    main_processes = []
-    for idx in range(num_instances):
-        interface_output_file_path      = base_folder + "/interface/int_out_" + str(idx) +".txt"
-        controller_output_file_path     = base_folder +  "/controller/cont_out_" + str(idx) +".txt"
+        main_processes = []
+        # for i in range(num_instances):
+        file_path = "output_logs/output_main_eval" + str(id) +".txt"
+        interface_output_file_path      = base_folder + "/interface/int_out_eval" + str(id) +".txt"
+        controller_output_file_path     = base_folder +  "/controller/cont_out_eval" + str(id) +".txt"
         controller_output_folder_path   = base_folder +  "/controller/"
         p = mp.Process(target=main_process, args=
-                       (
+                        (
+                        train,
                         os.getpid(), 
                         interface_output_file_path, 
                         controller_output_file_path, 
-                        controller_output_folder_path, 
-                        idx
+                        controller_output_folder_path,
+                        ros_id,
+                        id
                         ))
         main_processes.append(p)
         p.start()
-    print("Controllers started", flush=True)
 
-    while True:
-        time.sleep(1)
+
+        while True:
+            time.sleep(1)
+
+
 
