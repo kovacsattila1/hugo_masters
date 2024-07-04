@@ -41,14 +41,16 @@ class CriticNetwork(nn.Module):
 
         return q1
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, extension):
         print('... saving checkpoint ...')
-        T.save(self.state_dict(), self.checkpoint_file)
+        print("Loading checkpoint ", self.checkpoint_file + extension, flush=True)
+        print(self.checkpoint_file, flush=True)
+        T.save(self.state_dict(), self.checkpoint_file + extension)
 
-    def load_checkpoint(self):
+    def load_checkpoint(self, extension):
         print('... loading checkpoint ...')
-        print("loading checkpoint ", self.checkpoint_file, flush=True)
-        self.load_state_dict(T.load(self.checkpoint_file))
+        print("loading checkpoint ", self.checkpoint_file + extension, flush=True)
+        self.load_state_dict(T.load(self.checkpoint_file + extension))
 
 class ActorNetwork(nn.Module):
     def __init__(self, id, alpha, input_dims, fc1_dims, fc2_dims, fc3_dims,
@@ -85,13 +87,15 @@ class ActorNetwork(nn.Module):
 
         return prob
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, extension):
         print('... saving checkpoint ...')
-        T.save(self.state_dict(), self.checkpoint_file)
+        print("Loading checkpoint ", self.checkpoint_file + extension, flush=True)
+        print(self.checkpoint_file, flush=True)
+        T.save(self.state_dict(), self.checkpoint_file + extension)
 
-    def load_checkpoint(self):
+    def load_checkpoint(self, extension):
         print('... loading checkpoint ...')
-        print("loading checkpoint ", self.checkpoint_file, flush=True)
-        self.load_state_dict(T.load(self.checkpoint_file))
+        print("loading checkpoint ", self.checkpoint_file + extension, flush=True)
+        self.load_state_dict(T.load(self.checkpoint_file + extension))
 
 

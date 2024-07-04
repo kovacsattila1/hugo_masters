@@ -123,9 +123,9 @@ dt = 0
 
 
 
-def joint_control_td3(m2s, s2m, pid, file_path, id):
+def joint_control_td3(train, m2s, s2m, pid, controller_output_file_path, controller_output_folder_path, id):
 
-    with open(file_path, 'w') as f:
+    with open(controller_output_file_path, 'w') as f:
         sys.stdout = f
 
         class Coppelia:
@@ -146,9 +146,12 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
         agent = Agent_td3(id, alpha=0.001, beta=0.001, 
                         input_dims=env.observation_space.shape, tau=0.005, env=env,
                         batch_size=100, fc1_dims=800, fc2_dims=600, fc3_dims=400,
-                        n_actions=env.action_space.shape[0])
-        n_games = 15000
-        filename = "" \
+                        n_actions=env.action_space.shape[0], chkpt_dir=controller_output_folder_path)
+        
+        if train:
+            n_games = 50000
+
+            filename = "" \
             + 'Coppelia' + '_' \
             + 'td3' + '_' \
             + 'alpha' + str(agent.alpha) + '_' \
@@ -157,51 +160,91 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
             + 'fc1_' + str(agent.fc1_dims) + '_' \
             + 'fc2_' + str(agent.fc2_dims) + '_' \
             + 'fc3_' + str(agent.fc3_dims)
+
+            figure_file = controller_output_folder_path + "/plots/" + filename + '_' + str(id) + '.png'
+            step_rewards_file = controller_output_folder_path + "/rewards/step_rewards/" + filename + '_' + str(id) + '.csv'
+            episode_rewards_file = controller_output_folder_path + "/rewards/episode_rewards/" + filename + '_' + str(id) + '.csv'
+            average_rewards_file = controller_output_folder_path + "/rewards/average_rewards/" + filename + '_' + str(id) + '.csv'
+            best_score = -1000
+            score_history = []
+            # step_reward_history = []
+            # episode_reward_history = []
+            # average_reward_history = [] 
+        else:
+            agent.load_models(extension="")
+            n_games = 30
         
-        figure_file = 'plots/' + filename + '_' + str(id) + '.png'
+        #step_rewards_figure = controller_output_folder_path + "/rewards/step_rewards/" + filename + '_' + str(id) + '.csv'
+        #episode_rewards_figure = controller_output_folder_path + "/rewards/episode_rewards/" + filename + '_' + str(id) + '.csv'
+        #average_rewards_figure = controller_output_folder_path + "/rewards/average_rewards/" + filename + '_' + str(id) + '.csv'
 
-        best_score = -500
-        score_history = []
-
-
+       
 
 
         for i in range(n_games):
-                observation = env.reset()
-                # print("first observation", observation, flush=True)
-                done = False
-                score = 0
+            observation = env.reset()
 
-                while not done:
-                    action = agent.choose_action(observation)
-                    s2m.put([torch.tensor(action)])
-                    # print(env.step(action))
-                    # observation_, reward, done, _, _ = env.step(action)
+            done = False
+            score = 0
 
-                    observation_ = m2s.get()
-                    # print("other observation", observation, flush=True)
+            # if train:
+            #     agent.noise.reset()
+
+            while not done:
+                action = agent.choose_action(observation)
+                # print("observation: ", observation, flush=True)
+                # print("action: ", action, flush=True)
+                # print("\n")
+                s2m.put([torch.tensor(action)])
+                observation_ = m2s.get()
+
+                if train:
                     reward = m2s.get()
-                    done = m2s.get()
+                    # step_reward_history.append(reward)
 
+                done = m2s.get()
 
+                if train:
                     agent.remember(observation, action, reward, observation_, done)
                     agent.learn()
-                    # print("reward", reward, flush=True)
                     score += reward
-                    observation = observation_
+                observation = observation_
 
+
+            if train:
+                # episode_reward_history.append(score)
                 score_history.append(score)
                 avg_score = np.mean(score_history[-100:])
+                # average_reward_history.append(avg_score)
 
                 if avg_score > best_score:
                     best_score = avg_score
                     agent.save_models()
 
                 print('episode ', i, 'score %.1f' % score,
-                        'trailing 100 games avg %.1f' % avg_score, flush=True)
+                        'average score %.1f' % avg_score, flush=True)
 
-        x = [i+1 for i in range(n_games)]
-        plc_td3(x, score_history, figure_file)
+        if train:
+            agent.save_models("_last")
+            x = [i+1 for i in range(n_games)]
+            plc_td3(x, score_history, figure_file)
+
+            with open(step_rewards_file, 'w') as f:
+                write = csv.writer(f)
+                # write.writerow(step_reward_history)
+
+            with open(episode_rewards_file, 'w') as f:
+                write = csv.writer(f)
+                # write.writerow(episode_reward_history)
+
+            with open(average_rewards_file, 'w') as f:
+                write = csv.writer(f)
+                # write.writerow(average_reward_history)
+
+        os.kill(pid, signal.SIGINT)
+        print("kill signal sent!", flush=True)
+        exit()
+
 
 
 
@@ -209,7 +252,7 @@ def joint_control_td3(m2s, s2m, pid, file_path, id):
 
 
 
-def joint_control_ddpg(train, m2s, s2m, pid, controller_output_file_path, controller_output_folder_path,  id):
+def joint_control_ddpg(train, m2s, s2m, pid, controller_output_file_path, controller_output_folder_path, id):
     print("Controller process with id = ", id, "started", flush=True)
     # print("debug - controller output file path = ", controller_output_file_path)
 
@@ -1318,7 +1361,7 @@ def main_process(
         # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m), daemon=True)
         # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
         p1 = mp.Process(
-            target=joint_control_ddpg, 
+            target=joint_control_td3, 
             args=(
                 train,
                 m2s, 
@@ -1490,14 +1533,14 @@ if __name__ == '__main__':
 
     if train:
 
-        num_instances = 10
+        num_instances = 5
 
         bash_commands = []
         for i in range(num_instances):
             command = "/home/kovacs/Downloads/CoppeliaSim_Edu_V4_6_0_rev18_Ubuntu20_04/coppeliaSim.sh -h -gparam1=" + str(i) + " -GROSInterface.nodeName=MyNodeName" + str(i) + " /home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/asti.ttt"
             bash_commands.append(command)
 
-        path = "/home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/results"
+        path = "/media/kovacs/linux_drive5/training_results/"
         base_folder = create_next_run_folder(path)
 
 
@@ -1539,15 +1582,15 @@ if __name__ == '__main__':
         num_instances = 1
 
         #which run to evaluate
-        run = 12
+        run = 17
 
         #name for ros node and channel creation
         ros_id = 99
 
         #which agent to evaluate
-        id = 8
+        id = 7
 
-        base_folder = "/home/kovacs/Documents/disszertacio/hugo_python_control_coppeliasim_v4/results/run" + str(run)
+        base_folder = "/media/kovacs/linux_drive5/training_results/run" + str(run)
 
         # num_instances = 1
 

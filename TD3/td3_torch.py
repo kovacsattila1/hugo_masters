@@ -9,7 +9,7 @@ class Agent():
     def __init__(self, id, alpha, beta, input_dims, tau, env,
             gamma=0.99, update_actor_interval=2, warmup=1000,
             n_actions=2, max_size=1000000, fc1_dims=400,
-            fc2_dims=300, fc3_dims=200, batch_size=100, noise=0.1):
+            fc2_dims=300, fc3_dims=200, batch_size=100, noise=0.1, chkpt_dir=''):
         self.gamma = gamma
         self.tau = tau
         self.max_action = [1]
@@ -27,25 +27,26 @@ class Agent():
         self.fc1_dims = fc1_dims
         self.fc2_dims = fc2_dims
         self.fc3_dims = fc3_dims
+        self.chkpt_dir= chkpt_dir
 
         self.actor = ActorNetwork(id, alpha, input_dims, fc1_dims,
                                   fc2_dims, fc3_dims, n_actions=n_actions,
-                                  name='actor')
+                                  name='actor', chkpt_dir=self.chkpt_dir)
         self.critic_1 = CriticNetwork(id, beta, input_dims, fc1_dims,
                                       fc2_dims, fc3_dims, n_actions=n_actions,
-                                      name='critic_1')
+                                      name='critic_1', chkpt_dir=self.chkpt_dir)
         self.critic_2 = CriticNetwork(id, beta, input_dims, fc1_dims,
                                       fc2_dims, fc3_dims, n_actions=n_actions,
-                                      name='critic_2')
+                                      name='critic_2', chkpt_dir=self.chkpt_dir)
         self.target_actor = ActorNetwork(id, alpha, input_dims, fc1_dims,
                                          fc2_dims, fc3_dims, n_actions=n_actions,
-                                         name='target_actor')
+                                         name='target_actor', chkpt_dir=self.chkpt_dir)
         self.target_critic_1 = CriticNetwork(id, beta, input_dims, fc1_dims,
                                          fc2_dims, fc3_dims, n_actions=n_actions,
-                                         name='target_critic_1')
+                                         name='target_critic_1', chkpt_dir=self.chkpt_dir)
         self.target_critic_2 = CriticNetwork(id, beta, input_dims, fc1_dims,
                                          fc2_dims, fc3_dims, n_actions=n_actions,
-                                         name='target_critic_2')
+                                         name='target_critic_2', chkpt_dir=self.chkpt_dir)
 
         self.noise = noise
         self.update_network_parameters(tau=1)
@@ -175,20 +176,20 @@ class Agent():
         self.target_critic_2.load_state_dict(critic_2_state_dict)
         self.target_actor.load_state_dict(actor_state_dict)
 
-    def save_models(self):
-        self.actor.save_checkpoint()
-        self.target_actor.save_checkpoint()
-        self.critic_1.save_checkpoint()
-        self.critic_2.save_checkpoint()
-        self.target_critic_1.save_checkpoint()
-        self.target_critic_2.save_checkpoint()
+    def save_models(self, extension=''):
+        self.actor.save_checkpoint(extension)
+        self.target_actor.save_checkpoint(extension)
+        self.critic_1.save_checkpoint(extension)
+        self.critic_2.save_checkpoint(extension)
+        self.target_critic_1.save_checkpoint(extension)
+        self.target_critic_2.save_checkpoint(extension)
 
-    def load_models(self):
-        self.actor.load_checkpoint()
-        self.target_actor.load_checkpoint()
-        self.critic_1.load_checkpoint()
-        self.critic_2.load_checkpoint()
-        self.target_critic_1.load_checkpoint()
-        self.target_critic_2.load_checkpoint()
+    def load_models(self, extension=''):
+        self.actor.load_checkpoint(extension)
+        self.target_actor.load_checkpoint(extension)
+        self.critic_1.load_checkpoint(extension)
+        self.critic_2.load_checkpoint(extension)
+        self.target_critic_1.load_checkpoint(extension)
+        self.target_critic_2.load_checkpoint(extension)
 
     
