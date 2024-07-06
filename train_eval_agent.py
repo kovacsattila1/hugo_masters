@@ -280,7 +280,7 @@ def joint_control_ddpg(train, m2s, s2m, pid, controller_output_file_path, contro
                         n_actions=env.action_space.shape[0], chkpt_dir=controller_output_folder_path)
         
         if train:
-            n_games = 5000
+            n_games = 50000
 
             filename = "" \
             + 'Coppelia' + '_' \
@@ -1050,7 +1050,7 @@ def main_process(
             azo = actual_ori[2]
 
 
-            forward_weight = 100
+            forward_weight = 200
             lateral_weigth = 10
             vertical_weigth = 5
 
@@ -1311,7 +1311,7 @@ def main_process(
                     action = s2m.get()
 
                 mapped_action = action[0].tolist()
-                mapped_action = [x / 0.05 for x in mapped_action]
+                mapped_action = [x / 0.1 for x in mapped_action]
 
                 action_packet = Float32MultiArray()
                 action_packet.data = mapped_action
@@ -1361,7 +1361,7 @@ def main_process(
         # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m), daemon=True)
         # p1 = mp.Process(target=joint_control_ddpg, args=(m2s, s2m, os.getpid(), file_path, id), daemon=True)
         p1 = mp.Process(
-            target=joint_control_td3, 
+            target=joint_control_ddpg, 
             args=(
                 train,
                 m2s, 
